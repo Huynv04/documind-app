@@ -98,7 +98,7 @@ export default function GoogleCallbackPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen flex items-center justify-center bg-slate-950 text-white font-sans text-xs">
+        <div className="min-h-screen flex items-center justify-center bg-white text-slate-900 font-sans text-xs">
           Đang tải phiên xác thực...
         </div>
       }

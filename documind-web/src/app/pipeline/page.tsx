@@ -367,7 +367,7 @@ export default function PipelinePage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans">
+    <div className="min-h-screen bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans">
       <Navbar />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-8 space-y-8">
@@ -397,10 +397,10 @@ export default function PipelinePage() {
               </div>
               <div>
                 <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">
-                  Giám sát Hàng đợi & Pipeline Ingestion
+                  Tiến trình Xử lý & Đồng bộ Tri thức
                 </h1>
                 <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-                  Theo dõi trạng thái thời gian thực của BullMQ Queue, Worker bóc tách văn bản, sinh vector embeddings và index vào pgvector.
+                  Theo dõi trạng thái tự động hóa theo thời gian thực: Tiếp nhận tài liệu, bóc tách cấu trúc, phân tích ngữ nghĩa AI và lập chỉ mục tìm kiếm thông minh.
                 </p>
               </div>
             </div>
@@ -464,15 +464,15 @@ export default function PipelinePage() {
             <div>
               <div className="flex items-center gap-2">
                 <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800">
-                  RAG Ingestion Architecture
+                  Quy trình Tự động hóa
                 </span>
                 <span className="text-xs text-slate-400">•</span>
                 <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
-                  Cơ chế ngầm BullMQ + Redis + pgvector
+                  Xử lý ngầm hiệu năng cao
                 </span>
               </div>
               <h2 className="text-lg font-bold text-slate-900 dark:text-white mt-1">
-                Dòng chảy Xử lý & Bóc tách Dữ liệu (5-Stage Ingestion Pipeline)
+                Dòng chảy Xử lý & Chuẩn hóa Tri thức (5 Giai đoạn)
               </h2>
             </div>
 

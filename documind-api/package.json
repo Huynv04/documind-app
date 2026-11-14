@@ -13,11 +13,18 @@
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
     "format": "prettier --write \"src/**/*.ts\"",
     "test": "jest --passWithNoTests",
+    "test:unit": "jest --testPathPattern=src/modules/.*\\.spec\\.ts",
+    "test:security": "jest --testPathPattern=test/security/.*\\.spec\\.ts",
+    "test:integration": "jest --testPathPattern=test/integration/.*\\.spec\\.ts --runInBand",
+    "test:rag-eval": "ts-node tests/rag-eval/run-evals.ts",
+    "test:ci": "npm run test:unit && npm run test:security",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",
+    "db:vector": "ts-node database/init-vector.ts",
     "db:seed": "ts-node database/seeds/index.ts",
+    "db:setup": "npm run db:push && npm run db:vector && npm run db:seed",
     "db:studio": "prisma studio",
     "db:generate": "prisma generate"
   },
@@ -85,18 +92,19 @@
   },
   "jest": {
     "moduleFileExtensions": ["js", "json", "ts"],
-    "rootDir": "src",
+    "rootDir": ".",
+    "roots": ["<rootDir>/src", "<rootDir>/test"],
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {
       "^.+\\.(t|j)s$": "ts-jest"
     },
-    "collectCoverageFrom": ["**/*.(t|j)s"],
-    "coverageDirectory": "../coverage",
+    "collectCoverageFrom": ["src/**/*.(t|j)s"],
+    "coverageDirectory": "./coverage",
     "testEnvironment": "node",
     "moduleNameMapper": {
-      "^@config/(.*)$": "<rootDir>/config/$1",
-      "^@modules/(.*)$": "<rootDir>/modules/$1",
-      "^@common/(.*)$": "<rootDir>/common/$1"
+      "^@config/(.*)$": "<rootDir>/src/config/$1",
+      "^@modules/(.*)$": "<rootDir>/src/modules/$1",
+      "^@common/(.*)$": "<rootDir>/src/common/$1"
     }
   }
 }

@@ -50,6 +50,9 @@ import {
   TrendingUp,
   User,
   Building2,
+  PanelLeftClose,
+  PanelLeftOpen,
+  SquarePen,
 } from 'lucide-react';
 
 const SUGGESTED_PROMPTS = [
@@ -96,7 +99,7 @@ const FEEDBACK_REASONS: { key: FeedbackReason; label: string; desc: string; badg
     key: 'INCOMPLETE',
     label: 'Trả lời thiếu ý',
     desc: 'Nội dung sơ sài, thiếu các điều kiện loại trừ hoặc văn bản kèm theo',
-    badgeColor: 'border-purple-200 bg-purple-50 text-purple-700 dark:bg-purple-950/50 dark:text-purple-300',
+    badgeColor: 'border-slate-200 bg-slate-100 text-slate-700',
   },
   {
     key: 'CITATION_ERROR',
@@ -196,14 +199,22 @@ export default function ChatPage() {
   const loadSessions = async () => {
     try {
       const list = await chatApi.getSessions();
-      setSessions(list);
-      if (list.length > 0 && !activeSessionId) {
-        selectSession(list[0].id);
-      } else if (list.length === 0) {
-        handleNewChat();
-      }
+      // Drop any accidental empty dummy sessions from previous tests
+      const cleaned = list.filter((sess) => {
+        if (sess.title === 'Cuộc trò chuyện mới' && typeof window !== 'undefined') {
+          const msgsStr = localStorage.getItem(`documind_messages_${sess.id}`);
+          if (!msgsStr || JSON.parse(msgsStr).length === 0) {
+            chatApi.deleteSession(sess.id).catch(() => {});
+            return false;
+          }
+        }
+        return true;
+      });
+      setSessions(cleaned);
+      // Gemini pattern: Start with a clean prompt state (activeSessionId = null, messages = [])
+      // Do not automatically select or auto-create any session on initial load.
     } catch {
-      handleNewChat();
+      setSessions([]);
     }
   };
 
@@ -219,26 +230,15 @@ export default function ChatPage() {
     }
   };
 
-  const handleNewChat = async () => {
-    try {
-      const newSess = await chatApi.createSession('Cuộc trò chuyện mới');
-      setSessions((prev) => [newSess, ...prev.filter((s) => s.id !== newSess.id)]);
-      setActiveSessionId(newSess.id);
-      setMessages([]);
-      setSelectedCitation(null);
-      setDrawerOpen(false);
-    } catch {
-      const localId = 'sess_' + Date.now();
-      const localSess: ChatSession = {
-        id: localId,
-        userId: user?.id || 'local',
-        title: 'Cuộc trò chuyện mới',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      setSessions((prev) => [localSess, ...prev]);
-      setActiveSessionId(localId);
-      setMessages([]);
+  // Gemini-style: Reset to default fresh chat state WITHOUT eagerly creating or saving a session
+  const handleNewChat = () => {
+    setActiveSessionId(null);
+    setMessages([]);
+    setSelectedCitation(null);
+    setDrawerOpen(false);
+    setInputQuery('');
+    if (textareaRef.current) {
+      textareaRef.current.focus();
     }
   };
 
@@ -288,11 +288,7 @@ export default function ChatPage() {
       const remaining = sessions.filter((s) => s.id !== targetId);
       setSessions(remaining);
       if (activeSessionId === targetId) {
-        if (remaining.length > 0) {
-          selectSession(remaining[0].id);
-        } else {
-          handleNewChat();
-        }
+        handleNewChat();
       }
     } finally {
       setDeletingSession(null);
@@ -382,7 +378,34 @@ export default function ChatPage() {
       textareaRef.current.style.height = 'auto';
     }
 
-    const currentSessId = activeSessionId || 'default';
+    let currentSessId = activeSessionId;
+    const generatedTitle = textToSend.slice(0, 36) + (textToSend.length > 36 ? '...' : '');
+
+    // Gemini-style lazy creation: Only create and save session when the first message is sent
+    if (!currentSessId) {
+      try {
+        const newSess = await chatApi.createSession(generatedTitle);
+        currentSessId = newSess.id;
+        setActiveSessionId(currentSessId);
+        setSessions((prev) => [newSess, ...prev]);
+      } catch {
+        currentSessId = 'sess_' + Date.now();
+        const fallbackSess: ChatSession = {
+          id: currentSessId,
+          userId: user?.id || 'local',
+          title: generatedTitle,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        setActiveSessionId(currentSessId);
+        setSessions((prev) => [fallbackSess, ...prev]);
+      }
+    } else if (messages.length === 0) {
+      chatApi.updateSession(currentSessId, generatedTitle).catch(() => {});
+      setSessions((prev) =>
+        prev.map((s) => (s.id === currentSessId ? { ...s, title: generatedTitle } : s)),
+      );
+    }
 
     // Append User message
     const userMessage: ChatMessage = {
@@ -410,15 +433,6 @@ export default function ChatPage() {
 
     const controller = new AbortController();
     setAbortController(controller);
-
-    // Auto-update session title on first user message if still default
-    if (messages.length === 0) {
-      const generatedTitle = textToSend.slice(0, 36) + (textToSend.length > 36 ? '...' : '');
-      chatApi.updateSession(currentSessId, generatedTitle).catch(() => {});
-      setSessions((prev) =>
-        prev.map((s) => (s.id === currentSessId ? { ...s, title: generatedTitle } : s)),
-      );
-    }
 
     let accumulatedContent = '';
 
@@ -468,6 +482,24 @@ export default function ChatPage() {
                 : m,
             ),
           );
+          if (typeof window !== 'undefined' && currentSessId) {
+            const finalAssistant: ChatMessage = {
+              id: info.messageId || assistantMessageId,
+              sessionId: currentSessId,
+              role: 'assistant',
+              content: accumulatedContent,
+              confidence: 'high',
+              citations: [],
+              latencyMs: info.latencyMs,
+              createdAt: new Date().toISOString(),
+            };
+            const existing = localStorage.getItem(`documind_messages_${currentSessId}`);
+            const parsed = existing ? JSON.parse(existing) : [];
+            localStorage.setItem(
+              `documind_messages_${currentSessId}`,
+              JSON.stringify([...parsed, userMessage, finalAssistant]),
+            );
+          }
         },
       });
     } catch (err: any) {
@@ -523,6 +555,26 @@ export default function ChatPage() {
             ),
           );
           await new Promise((r) => setTimeout(r, 10));
+        }
+
+        if (typeof window !== 'undefined' && currentSessId) {
+          const finalAssistant: ChatMessage = {
+            id: assistantMessageId,
+            sessionId: currentSessId,
+            role: 'assistant',
+            content: mockFallbackAnswer,
+            confidence: 'high',
+            citations: mockCitations,
+            tokensUsed: 185,
+            latencyMs: 380,
+            createdAt: new Date().toISOString(),
+          };
+          const existing = localStorage.getItem(`documind_messages_${currentSessId}`);
+          const parsed = existing ? JSON.parse(existing) : [];
+          localStorage.setItem(
+            `documind_messages_${currentSessId}`,
+            JSON.stringify([...parsed, userMessage, finalAssistant]),
+          );
         }
       }
     } finally {
@@ -636,169 +688,211 @@ export default function ChatPage() {
   );
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans">
+    <div className="min-h-screen bg-[#f4f2ee] text-[#191919] flex flex-col font-sans">
       <Navbar />
 
       {/* Main Container */}
-      <div className="flex-1 flex overflow-hidden h-[calc(100vh-4rem)]">
+      <div className="flex-1 flex overflow-hidden h-[calc(100vh-3.5rem)]">
         {/* ======================================================== */}
-        {/* 1. LEFT SIDEBAR: CHAT SESSIONS                           */}
+        {/* 1. LEFT SIDEBAR: EXPANDED (w-72) vs COLLAPSED RAIL (w-16)  */}
         {/* ======================================================== */}
-        <aside
-          className={`${
-            sidebarOpen ? 'w-72' : 'w-0 -translate-x-full'
-          } transition-all duration-300 ease-in-out border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col z-20 shrink-0`}
-        >
-          {/* Sidebar Top: New Chat CTA */}
-          <div className="p-3 border-b border-slate-100 dark:border-slate-800 space-y-2">
-            <button
-              onClick={handleNewChat}
-              className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm transition shadow-sm shadow-indigo-500/20 active:scale-[0.98] cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Cuộc trò chuyện mới</span>
-            </button>
-
-            {/* Session Search */}
-            <div className="relative">
-              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Tìm chủ đề hội thoại..."
-                value={sessionSearch}
-                onChange={(e) => setSessionSearch(e.target.value)}
-                className="w-full text-xs pl-8 pr-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-              />
-            </div>
-          </div>
-
-          {/* Session List */}
-          <div className="flex-1 overflow-y-auto p-2 space-y-1">
-            <div className="px-2 py-1 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-              Lịch sử hội thoại
+        {sidebarOpen ? (
+          <aside className="w-72 transition-all duration-200 border-r border-[#e0dfdc] bg-white flex flex-col z-20 shrink-0">
+            {/* Header: Title + Collapse Icon */}
+            <div className="p-3 border-b border-slate-100 flex items-center justify-between">
+              <span className="text-xs font-bold text-[#191919] uppercase tracking-wider">
+                Lịch sử hội thoại
+              </span>
+              <button
+                onClick={() => setSidebarOpen(false)}
+                title="Thu gọn thanh bên"
+                className="p-1.5 rounded-md hover:bg-slate-100 text-slate-500 hover:text-[#191919] transition cursor-pointer"
+              >
+                <PanelLeftClose className="w-4 h-4" />
+              </button>
             </div>
 
-            {filteredSessions.length === 0 ? (
-              <div className="p-4 text-center text-xs text-slate-400">
-                Chưa có phiên hội thoại nào
+            {/* Sidebar Top: New Chat CTA */}
+            <div className="p-3 border-b border-slate-100 space-y-2">
+              <button
+                onClick={handleNewChat}
+                className={`w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-md font-semibold text-xs transition shadow-xs cursor-pointer ${
+                  activeSessionId === null
+                    ? 'bg-[#0a66c2] text-white hover:bg-[#004182]'
+                    : 'bg-[#edf3f8] text-[#0a66c2] hover:bg-[#dce6f1]'
+                }`}
+              >
+                <SquarePen className="w-4 h-4" />
+                <span>Cuộc trò chuyện mới</span>
+              </button>
+
+              {/* Session Search */}
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Tìm chủ đề hội thoại..."
+                  value={sessionSearch}
+                  onChange={(e) => setSessionSearch(e.target.value)}
+                  className="w-full text-xs pl-8 pr-3 py-1.5 rounded-md border border-slate-200 bg-[#edf3f8] hover:bg-[#e4ebf2] focus:bg-white text-[#191919] focus:outline-none focus:border-[#0a66c2] transition"
+                />
               </div>
-            ) : (
-              filteredSessions.map((sess) => {
-                const isActive = sess.id === activeSessionId;
-                const isEditing = sess.id === editingSessionId;
+            </div>
 
-                if (isEditing) {
+            {/* Session List */}
+            <div className="flex-1 overflow-y-auto p-2 space-y-1">
+              {filteredSessions.length === 0 ? (
+                sessionSearch.trim() ? (
+                  <div className="p-4 text-center text-xs text-slate-400">
+                    Không tìm thấy kết quả
+                  </div>
+                ) : null
+              ) : (
+                filteredSessions.map((sess) => {
+                  const isActive = sess.id === activeSessionId;
+                  const isEditing = sess.id === editingSessionId;
+
+                  if (isEditing) {
+                    return (
+                      <div
+                        key={sess.id}
+                        className="p-1.5 rounded-md border border-[#0a66c2] bg-[#edf3f8] flex items-center gap-1.5"
+                      >
+                        <input
+                          ref={renameInputRef}
+                          type="text"
+                          value={editingSessionTitle}
+                          onChange={(e) => setEditingSessionTitle(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') saveRenameSession(sess);
+                            if (e.key === 'Escape') cancelRenameSession();
+                          }}
+                          className="flex-1 text-xs px-2 py-1 bg-white border border-slate-300 rounded text-slate-900 focus:outline-none focus:border-[#0a66c2]"
+                        />
+                        <button
+                          onClick={() => saveRenameSession(sess)}
+                          title="Lưu tên (Enter)"
+                          className="p-1 rounded text-emerald-600 hover:bg-emerald-100 transition"
+                        >
+                          <Check className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={cancelRenameSession}
+                          title="Hủy (Esc)"
+                          className="p-1 rounded text-slate-400 hover:bg-slate-200 transition"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    );
+                  }
+
                   return (
                     <div
                       key={sess.id}
-                      className="p-1.5 rounded-xl border border-indigo-400 bg-indigo-50/50 dark:bg-indigo-950/60 flex items-center gap-1.5"
+                      onClick={() => selectSession(sess.id)}
+                      className={`group relative flex items-center justify-between p-2.5 text-xs font-medium cursor-pointer transition rounded-md ${
+                        isActive
+                          ? 'bg-[#edf3f8] text-[#0a66c2] font-semibold border-l-2 border-[#0a66c2]'
+                          : 'text-slate-600 hover:bg-slate-100 hover:text-[#191919]'
+                      }`}
                     >
-                      <input
-                        ref={renameInputRef}
-                        type="text"
-                        value={editingSessionTitle}
-                        onChange={(e) => setEditingSessionTitle(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') saveRenameSession(sess);
-                          if (e.key === 'Escape') cancelRenameSession();
-                        }}
-                        className="flex-1 text-xs px-2 py-1 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                      />
-                      <button
-                        onClick={() => saveRenameSession(sess)}
-                        title="Lưu tên (Enter)"
-                        className="p-1 rounded-md text-emerald-600 hover:bg-emerald-100 dark:hover:bg-emerald-950/60 transition"
-                      >
-                        <Check className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={cancelRenameSession}
-                        title="Hủy (Esc)"
-                        className="p-1 rounded-md text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 transition"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
+                      <div className="flex items-center gap-2 min-w-0 pr-10">
+                        <MessageSquare
+                          className={`w-3.5 h-3.5 shrink-0 ${
+                            isActive ? 'text-[#0a66c2]' : 'text-slate-400'
+                          }`}
+                        />
+                        <span className="truncate">{sess.title || 'Chưa đặt tên'}</span>
+                      </div>
+
+                      {/* Action buttons on hover */}
+                      <div className="absolute right-2 opacity-0 group-hover:opacity-100 flex items-center gap-0.5 transition">
+                        <button
+                          onClick={(e) => startRenameSession(sess, e)}
+                          title="Đổi tên chủ đề"
+                          className="p-1 rounded text-slate-400 hover:text-[#0a66c2] hover:bg-slate-200 transition"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={(e) => promptDeleteSession(sess, e)}
+                          title="Xóa phiên này"
+                          className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
                   );
-                }
+                })
+              )}
+            </div>
 
-                return (
-                  <div
-                    key={sess.id}
-                    onClick={() => selectSession(sess.id)}
-                    className={`group relative flex items-center justify-between p-2.5 rounded-xl text-xs font-medium cursor-pointer transition ${
-                      isActive
-                        ? 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 font-semibold border border-indigo-200/80 dark:border-indigo-800/80'
-                        : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/60'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0 pr-12">
-                      <MessageSquare
-                        className={`w-4 h-4 shrink-0 ${
-                          isActive ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400'
-                        }`}
-                      />
-                      <span className="truncate">{sess.title || 'Chưa đặt tên'}</span>
-                    </div>
+            {/* Sidebar Footer: System Status */}
+            <div className="p-3 border-t border-slate-100 text-[11px] text-slate-400 flex items-center justify-between bg-slate-50">
+              <span className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                RAG Online
+              </span>
+              <span className="font-mono text-[10px]">DocuMind v1.0</span>
+            </div>
+          </aside>
+        ) : (
+          /* COLLAPSED RAIL (Gemini style) */
+          <aside className="w-16 transition-all duration-200 border-r border-[#e0dfdc] bg-white flex flex-col items-center py-3 z-20 shrink-0 space-y-3">
+            {/* 1. Open Sidebar Icon */}
+            <button
+              onClick={() => setSidebarOpen(true)}
+              title="Mở rộng thanh bên"
+              className="w-10 h-10 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-600 hover:text-[#191919] transition cursor-pointer"
+            >
+              <PanelLeftOpen className="w-5 h-5" />
+            </button>
 
-                    {/* Action buttons on hover: Inline Rename & Delete */}
-                    <div className="absolute right-2 opacity-0 group-hover:opacity-100 flex items-center gap-0.5 transition">
-                      <button
-                        onClick={(e) => startRenameSession(sess, e)}
-                        title="Đổi tên chủ đề"
-                        className="p-1 rounded-md text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition"
-                      >
-                        <Edit2 className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={(e) => promptDeleteSession(sess, e)}
-                        title="Xóa phiên này"
-                        className="p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
+            {/* 2. New Chat Icon */}
+            <button
+              onClick={handleNewChat}
+              title="Cuộc trò chuyện mới"
+              className={`w-10 h-10 rounded-lg flex items-center justify-center transition shadow-xs cursor-pointer ${
+                activeSessionId === null
+                  ? 'bg-[#0a66c2] text-white hover:bg-[#004182]'
+                  : 'bg-[#edf3f8] text-[#0a66c2] hover:bg-[#0a66c2] hover:text-white'
+              }`}
+            >
+              <SquarePen className="w-5 h-5" />
+            </button>
 
-          {/* Sidebar Footer: System Status */}
-          <div className="p-3 border-t border-slate-100 dark:border-slate-800 text-[11px] text-slate-400 flex items-center justify-between bg-slate-50/50 dark:bg-slate-950/40">
-            <span className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              RAG Hybrid Online
-            </span>
-            <span className="font-mono">v1.0-pgvector</span>
-          </div>
-        </aside>
+            {/* 3. Search Icon (opens and focuses search) */}
+            <button
+              onClick={() => {
+                setSidebarOpen(true);
+              }}
+              title="Tìm kiếm hội thoại"
+              className="w-10 h-10 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-500 hover:text-[#191919] transition cursor-pointer"
+            >
+              <Search className="w-4 h-4" />
+            </button>
+          </aside>
+        )}
 
         {/* ======================================================== */}
         {/* 2. CENTER: CHAT WORKSPACE                                */}
         {/* ======================================================== */}
-        <section className="flex-1 flex flex-col min-w-0 bg-slate-50 dark:bg-slate-950 relative">
+        <section className="flex-1 flex flex-col min-w-0 bg-[#f4f2ee] relative">
           {/* Header Bar */}
-          <header className="h-14 px-4 border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md flex items-center justify-between shrink-0 z-10">
+          <header className="h-14 px-4 border-b border-[#e0dfdc] bg-white flex items-center justify-between shrink-0 z-10">
             <div className="flex items-center gap-3 min-w-0">
-              <button
-                onClick={() => setSidebarOpen(!sidebarOpen)}
-                title={sidebarOpen ? 'Thu gọn sidebar' : 'Mở rộng sidebar'}
-                className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition cursor-pointer"
-              >
-                <Layers className="w-4 h-4" />
-              </button>
-
-              <div className="flex items-center gap-2 min-w-0">
-                <div className="w-7 h-7 rounded-lg bg-indigo-600 flex items-center justify-center text-white shadow-sm shrink-0">
-                  <Sparkles className="w-4 h-4" />
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-8 h-8 rounded-md bg-[#0a66c2] flex items-center justify-center text-white shadow-xs shrink-0">
+                  <MessageSquare className="w-4 h-4" />
                 </div>
                 <div className="min-w-0">
-                  <h2 className="text-sm font-bold text-slate-900 dark:text-white truncate">
-                    {sessions.find((s) => s.id === activeSessionId)?.title || 'Trợ lý Tri thức Nội bộ'}
+                  <h2 className="text-sm font-bold text-[#191919] truncate">
+                    {sessions.find((s) => s.id === activeSessionId)?.title || 'Cuộc trò chuyện mới'}
                   </h2>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
-                    Chế độ: Hybrid Search (Vector + FTS) • Bảo mật phân quyền RBAC
+                  <p className="text-[11px] text-slate-500 truncate">
+                    Trợ lý Tri thức Doanh nghiệp • Phân quyền phòng ban
                   </p>
                 </div>
               </div>
@@ -809,10 +903,10 @@ export default function ChatPage() {
               {/* Quality Review Dashboard Button */}
               <button
                 onClick={handleOpenQualityDashboard}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-semibold transition cursor-pointer"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-[#e0dfdc] hover:bg-slate-100 text-slate-700 text-xs font-semibold transition cursor-pointer"
                 title="Xem thống kê tỷ lệ hài lòng và phản hồi tiêu cực"
               >
-                <BarChart3 className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                <BarChart3 className="w-3.5 h-3.5 text-[#0a66c2]" />
                 <span className="hidden md:inline">Đánh giá tri thức</span>
               </button>
 
@@ -820,7 +914,7 @@ export default function ChatPage() {
               {messages.length > 0 && (
                 <button
                   onClick={handleExportTranscript}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-semibold transition cursor-pointer"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-[#e0dfdc] hover:bg-slate-100 text-slate-700 text-xs font-semibold transition cursor-pointer"
                   title="Tải xuống biên bản cuộc trò chuyện dạng Markdown"
                 >
                   <FileDown className="w-3.5 h-3.5 text-slate-500" />
@@ -831,16 +925,16 @@ export default function ChatPage() {
               {/* Toggle Citation Drawer */}
               <button
                 onClick={() => setDrawerOpen(!drawerOpen)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition cursor-pointer ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md border text-xs font-semibold transition cursor-pointer ${
                   drawerOpen
-                    ? 'bg-indigo-50 dark:bg-indigo-950/60 border-indigo-300 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300'
-                    : 'border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300'
+                    ? 'bg-[#edf3f8] border-[#0a66c2]/40 text-[#0a66c2]'
+                    : 'border-[#e0dfdc] hover:bg-slate-100 text-slate-700'
                 }`}
               >
                 <FileText className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">Đối chiếu tài liệu</span>
                 {selectedCitation && (
-                  <span className="w-2 h-2 rounded-full bg-indigo-600 animate-ping" />
+                  <span className="w-2 h-2 rounded-full bg-[#0a66c2] animate-ping" />
                 )}
               </button>
             </div>
@@ -851,37 +945,37 @@ export default function ChatPage() {
             {messages.length === 0 ? (
               /* EMPTY STATE: Welcoming & Prompt Suggestions */
               <div className="max-w-2xl mx-auto py-12 flex flex-col items-center text-center">
-                <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center text-white shadow-xl shadow-indigo-500/25 mb-4 animate-bounce">
-                  <Sparkles className="w-8 h-8" />
+                <div className="w-12 h-12 rounded-lg bg-[#0a66c2] flex items-center justify-center text-white shadow-xs mb-3">
+                  <MessageSquare className="w-6 h-6" />
                 </div>
-                <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+                <h1 className="text-xl font-bold text-[#191919] tracking-tight">
                   Trợ lý Tra cứu Tri thức DocuMind AI
                 </h1>
-                <p className="text-sm text-slate-500 dark:text-slate-400 mt-2 max-w-lg leading-relaxed">
+                <p className="text-xs text-slate-600 mt-2 max-w-lg leading-relaxed">
                   Đặt câu hỏi bằng tiếng Việt tự nhiên về chính sách, quy chế, sổ tay hoặc tài liệu nghiệp vụ.
-                  Mọi câu trả lời đều được truy xuất có căn cứ từ dữ liệu nội bộ với tỷ lệ ảo giác $\le 1\%$.
+                  Mọi câu trả lời đều được đối chiếu từ dữ liệu nội bộ với dẫn chứng trang văn bản rõ ràng.
                 </p>
 
                 {/* Prompt Suggestions Grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full mt-8">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full mt-6">
                   {SUGGESTED_PROMPTS.map((item, idx) => (
                     <button
                       key={idx}
                       onClick={() => handleSendMessage(item.query)}
-                      className="p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-indigo-500 hover:shadow-md transition text-left group flex flex-col justify-between cursor-pointer"
+                      className="p-3.5 rounded-lg border border-[#e0dfdc] bg-white hover:border-[#0a66c2] shadow-[0_1px_3px_rgba(0,0,0,0.06)] transition text-left group flex flex-col justify-between cursor-pointer"
                     >
                       <div className="flex items-center gap-2 mb-1">
                         <span className="text-base">{item.icon}</span>
-                        <span className="text-xs font-bold text-slate-900 dark:text-slate-100 group-hover:text-indigo-600 transition">
+                        <span className="text-xs font-bold text-[#191919] group-hover:text-[#0a66c2] transition">
                           {item.title}
                         </span>
                       </div>
-                      <p className="text-[12px] text-slate-500 dark:text-slate-400 line-clamp-2">
+                      <p className="text-[11px] text-slate-600 line-clamp-2">
                         {item.query}
                       </p>
-                      <div className="mt-2 text-[10px] font-semibold text-indigo-600 dark:text-indigo-400 flex items-center justify-between">
+                      <div className="mt-2 text-[10px] font-semibold text-[#0a66c2] flex items-center justify-between">
                         <span>{item.dept}</span>
-                        <ChevronRight className="w-3 h-3 group-hover:translate-x-1 transition" />
+                        <ChevronRight className="w-3 h-3 group-hover:translate-x-1 transition text-[#0a66c2]" />
                       </div>
                     </button>
                   ))}
@@ -900,23 +994,23 @@ export default function ChatPage() {
                     >
                       {/* Avatar */}
                       {!isUser && (
-                        <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center text-white shadow-md shadow-indigo-500/20 shrink-0 mt-1">
-                          <Sparkles className="w-4 h-4" />
+                        <div className="w-8 h-8 rounded-md bg-[#0a66c2] flex items-center justify-center text-white shadow-xs shrink-0 mt-1">
+                          <FileText className="w-4 h-4" />
                         </div>
                       )}
 
                       {/* Bubble */}
                       <div className={`max-w-[85%] sm:max-w-[78%] flex flex-col ${isUser ? 'items-end' : 'items-start'}`}>
                         {isUser ? (
-                          <div className="p-4 rounded-2xl rounded-tr-sm bg-indigo-600 text-white shadow-sm text-sm leading-relaxed whitespace-pre-wrap">
+                          <div className="p-3.5 rounded-xl rounded-tr-xs bg-[#0a66c2] text-white shadow-xs text-xs sm:text-sm leading-relaxed whitespace-pre-wrap">
                             {msg.content}
                           </div>
                         ) : (
-                          <div className="w-full bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl rounded-tl-sm p-5 shadow-sm space-y-4 text-sm leading-relaxed">
+                          <div className="w-full bg-white border border-[#e0dfdc] rounded-xl rounded-tl-xs p-5 shadow-[0_1px_3px_rgba(0,0,0,0.06)] space-y-3.5 text-xs sm:text-sm leading-relaxed text-[#191919]">
                             {/* Rewritten Query Info Tag */}
                             {msg.rewrittenQuery && msg.rewrittenQuery !== msg.content && (
-                              <div className="flex items-start gap-2 p-2.5 rounded-xl bg-sky-50 dark:bg-sky-950/40 border border-sky-200 dark:border-sky-800/80 text-xs text-sky-800 dark:text-sky-300">
-                                <Info className="w-4 h-4 shrink-0 text-sky-600 mt-0.5" />
+                              <div className="flex items-start gap-2 p-2.5 rounded-md bg-[#edf3f8] border border-[#0a66c2]/20 text-xs text-[#0a66c2]">
+                                <Info className="w-4 h-4 shrink-0 text-[#0a66c2] mt-0.5" />
                                 <div>
                                   <span className="font-bold">Đã diễn giải lại câu hỏi:</span>{' '}
                                   <span className="italic">"{msg.rewrittenQuery}"</span>
@@ -935,18 +1029,18 @@ export default function ChatPage() {
                             </div>
 
                             {/* Main Content (Formatted Text with live cursor when streaming) */}
-                            <div className="text-slate-800 dark:text-slate-200 whitespace-pre-wrap leading-relaxed">
+                            <div className="text-slate-800 whitespace-pre-wrap leading-relaxed">
                               {msg.content}
                               {isStreaming && msg.id === messages[messages.length - 1].id && (
-                                <span className="inline-block w-2 h-4 ml-1 bg-indigo-600 dark:bg-indigo-400 animate-pulse align-middle rounded-[1px]" />
+                                <span className="inline-block w-2 h-4 ml-1 bg-[#0a66c2] animate-pulse align-middle rounded-[1px]" />
                               )}
                             </div>
 
                             {/* Citations List Chips */}
                             {msg.citations && msg.citations.length > 0 && (
-                              <div className="pt-3 border-t border-slate-100 dark:border-slate-800">
-                                <div className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-2 flex items-center gap-1.5">
-                                  <FileText className="w-3.5 h-3.5 text-indigo-600" />
+                              <div className="pt-3 border-t border-slate-100">
+                                <div className="text-xs font-bold text-[#191919] mb-2 flex items-center gap-1.5">
+                                  <FileText className="w-3.5 h-3.5 text-[#0a66c2]" />
                                   Nguồn trích dẫn đối chiếu ({msg.citations.length}):
                                 </div>
                                 <div className="flex flex-wrap gap-2">
@@ -954,10 +1048,10 @@ export default function ChatPage() {
                                     <button
                                       key={cIdx}
                                       onClick={() => handleOpenCitation(cit)}
-                                      className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition cursor-pointer ${
+                                      className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-medium border transition cursor-pointer ${
                                         selectedCitation?.chunkId === cit.chunkId
-                                          ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
-                                          : 'bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 dark:hover:bg-indigo-900/60'
+                                          ? 'bg-[#0a66c2] text-white border-[#0a66c2] shadow-xs'
+                                          : 'bg-[#edf3f8] text-[#0a66c2] border-[#0a66c2]/20 hover:bg-[#dbe7f1]'
                                       }`}
                                     >
                                       <span>[{cIdx + 1}]</span>
@@ -1051,9 +1145,9 @@ export default function ChatPage() {
           </div>
 
           {/* Sticky Bottom Prompt Input Bar */}
-          <div className="p-4 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 shrink-0">
+          <div className="p-4 bg-white border-t border-[#e0dfdc] shrink-0">
             <div className="max-w-4xl mx-auto">
-              <div className="relative rounded-2xl border-2 border-slate-200 dark:border-slate-800 focus-within:border-indigo-600 dark:focus-within:border-indigo-500 bg-white dark:bg-slate-950 shadow-lg shadow-slate-200/40 dark:shadow-none transition">
+              <div className="relative rounded-xl border border-[#e0dfdc] focus-within:border-[#0a66c2] focus-within:ring-1 focus-within:ring-[#0a66c2] bg-white shadow-xs transition">
                 <textarea
                   ref={textareaRef}
                   rows={1}
@@ -1066,14 +1160,14 @@ export default function ChatPage() {
                     }
                   }}
                   placeholder="Đặt câu hỏi về quy chế, SOP, chính sách nội bộ... (Nhấn Enter để gửi)"
-                  className="w-full pl-4 pr-24 py-3.5 text-sm bg-transparent text-slate-900 dark:text-slate-100 focus:outline-none resize-none max-h-44 leading-relaxed"
+                  className="w-full pl-4 pr-24 py-3 text-xs sm:text-sm bg-transparent text-[#191919] placeholder-slate-400 focus:outline-none resize-none max-h-44 leading-relaxed"
                 />
 
-                <div className="absolute right-2.5 bottom-2.5 flex items-center gap-1.5">
+                <div className="absolute right-2.5 bottom-2 flex items-center gap-1.5">
                   {isStreaming ? (
                     <button
                       onClick={handleStopGenerating}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold shadow transition cursor-pointer"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold shadow transition cursor-pointer"
                     >
                       <Square className="w-3.5 h-3.5 fill-current" />
                       <span>Dừng</span>
@@ -1082,7 +1176,7 @@ export default function ChatPage() {
                     <button
                       onClick={() => handleSendMessage()}
                       disabled={!inputQuery.trim()}
-                      className="p-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed text-white shadow-sm shadow-indigo-500/20 transition cursor-pointer"
+                      className="p-2 rounded-md bg-[#0a66c2] hover:bg-[#004182] disabled:opacity-40 disabled:cursor-not-allowed text-white shadow-xs transition cursor-pointer"
                       title="Gửi câu hỏi (Enter)"
                     >
                       <Send className="w-4 h-4" />
@@ -1093,7 +1187,7 @@ export default function ChatPage() {
 
               <div className="mt-2 flex items-center justify-between text-[11px] text-slate-400 px-1">
                 <span>
-                  Hỗ trợ phím tắt: <kbd className="px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-800 border font-mono">Enter</kbd> để gửi, <kbd className="px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-800 border font-mono">Shift+Enter</kbd> xuống dòng
+                  Phím tắt: <kbd className="px-1 py-0.5 rounded bg-slate-100 border font-mono">Enter</kbd> để gửi, <kbd className="px-1 py-0.5 rounded bg-slate-100 border font-mono">Shift+Enter</kbd> xuống dòng
                 </span>
                 <span className="hidden sm:inline">
                   DocuMind RAG • Không suy diễn ngoài tài liệu
@@ -1107,18 +1201,18 @@ export default function ChatPage() {
         {/* 3. RIGHT PANEL: CITATION DRAWER / SPLIT-VIEW             */}
         {/* ======================================================== */}
         {drawerOpen && (
-          <aside className="w-96 lg:w-[420px] border-l border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col z-20 shrink-0 shadow-2xl transition-all">
+          <aside className="w-96 lg:w-[420px] border-l border-[#e0dfdc] bg-white flex flex-col z-20 shrink-0 shadow-lg transition-all">
             {/* Drawer Header */}
-            <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-950/40">
+            <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
               <div className="flex items-center gap-2">
-                <FileText className="w-5 h-5 text-indigo-600" />
-                <h3 className="font-bold text-sm text-slate-900 dark:text-white">
+                <FileText className="w-5 h-5 text-[#0a66c2]" />
+                <h3 className="font-bold text-sm text-[#191919]">
                   Đối chiếu Nguồn trích dẫn
                 </h3>
               </div>
               <button
                 onClick={() => setDrawerOpen(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+                className="p-1 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-200 transition cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -1129,14 +1223,14 @@ export default function ChatPage() {
               {selectedCitation ? (
                 <>
                   {/* Document Card */}
-                  <div className="p-4 rounded-2xl bg-indigo-50/60 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900/60 space-y-3">
+                  <div className="p-4 rounded-xl bg-[#edf3f8] border border-[#0a66c2]/20 space-y-3">
                     <div className="flex items-start justify-between">
                       <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center shrink-0">
+                        <div className="w-8 h-8 rounded-md bg-[#0a66c2] text-white flex items-center justify-center shrink-0">
                           <FileText className="w-4 h-4" />
                         </div>
                         <div>
-                          <div className="text-xs font-bold text-slate-900 dark:text-white line-clamp-1">
+                          <div className="text-xs font-bold text-[#191919] line-clamp-1">
                             {selectedCitation.documentName || 'Tài liệu trích dẫn'}
                           </div>
                           <div className="text-[11px] text-slate-500 font-mono">
@@ -1146,13 +1240,13 @@ export default function ChatPage() {
                       </div>
 
                       {selectedCitation.score && (
-                        <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-400">
+                        <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-100 text-emerald-700">
                           {Math.round(selectedCitation.score * 100)}% khớp
                         </span>
                       )}
                     </div>
 
-                    <div className="flex items-center gap-2 pt-2 border-t border-indigo-100/80 dark:border-indigo-900/40 text-xs text-indigo-700 dark:text-indigo-300">
+                    <div className="flex items-center gap-2 pt-2 border-t border-[#0a66c2]/15 text-xs text-[#0a66c2]">
                       <span>Vị trí:</span>
                       <span className="font-bold">
                         {selectedCitation.pageNumber ? `Trang ${selectedCitation.pageNumber}` : 'Văn bản đầy đủ'}
@@ -1165,7 +1259,7 @@ export default function ChatPage() {
                       onClick={() =>
                         handleDownloadOriginal(selectedCitation.documentId, selectedCitation.documentName)
                       }
-                      className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 text-xs font-semibold hover:bg-indigo-50 dark:hover:bg-indigo-950/60 transition shadow-sm cursor-pointer"
+                      className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md bg-white border border-[#0a66c2]/30 text-[#0a66c2] text-xs font-semibold hover:bg-slate-50 transition shadow-2xs cursor-pointer"
                     >
                       <Download className="w-3.5 h-3.5" />
                       <span>Tải xuống tệp gốc</span>
@@ -1174,17 +1268,17 @@ export default function ChatPage() {
 
                   {/* Verbatim Excerpt Box */}
                   <div>
-                    <div className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                      <Sparkles className="w-3.5 h-3.5 text-purple-600" />
+                    <div className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                      <FileText className="w-3.5 h-3.5 text-[#0a66c2]" />
                       Đoạn trích dẫn nguyên văn (Excerpt):
                     </div>
-                    <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-950 border-l-4 border-l-indigo-600 border border-slate-200 dark:border-slate-800 text-xs leading-relaxed text-slate-800 dark:text-slate-200 font-sans whitespace-pre-wrap shadow-inner">
+                    <div className="p-4 rounded-xl bg-slate-50 border-l-4 border-l-[#0a66c2] border border-slate-200 text-xs leading-relaxed text-[#191919] font-sans whitespace-pre-wrap">
                       "{selectedCitation.excerpt}"
                     </div>
                   </div>
 
                   {/* Verification Notice */}
-                  <div className="p-3.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 text-xs text-amber-800 dark:text-amber-300 flex items-start gap-2">
+                  <div className="p-3 rounded-md bg-amber-50 border border-amber-200 text-xs text-amber-800 flex items-start gap-2">
                     <ShieldCheck className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                     <p className="leading-relaxed">
                       Đoạn trích trên được trích xuất trực tiếp từ cơ sở dữ liệu vector pgvector thông qua bộ lọc bảo mật RBAC.
@@ -1193,7 +1287,7 @@ export default function ChatPage() {
                 </>
               ) : (
                 <div className="text-center py-16 text-slate-400 space-y-2">
-                  <FileText className="w-12 h-12 mx-auto text-slate-300 dark:text-slate-700" />
+                  <FileText className="w-12 h-12 mx-auto text-slate-300" />
                   <p className="text-sm font-semibold">Chưa chọn trích dẫn nào</p>
                   <p className="text-xs max-w-xs mx-auto">
                     Bấm vào các thẻ trích dẫn [1], [2] bên dưới câu trả lời của AI để xem đoạn văn bản đối chiếu song song.
@@ -1276,7 +1370,7 @@ export default function ChatPage() {
 
             {/* 5 Distinct Reason Chips */}
             <div className="space-y-2">
-              <div className="text-xs font-bold text-slate-700 dark:text-slate-300">
+              <div className="text-xs font-bold text-slate-700">
                 Chọn lý do chính cần cải thiện:
               </div>
               <div className="grid grid-cols-1 gap-2">
@@ -1286,10 +1380,10 @@ export default function ChatPage() {
                     <button
                       key={item.key}
                       onClick={() => setSelectedFeedbackReason(item.key)}
-                      className={`w-full p-2.5 rounded-xl border text-left flex items-start justify-between transition cursor-pointer ${
+                      className={`w-full p-2.5 rounded-lg border text-left flex items-start justify-between transition cursor-pointer ${
                         isSelected
-                          ? 'border-indigo-600 bg-indigo-50/60 dark:bg-indigo-950/60 text-indigo-900 dark:text-indigo-200 ring-1 ring-indigo-500'
-                          : 'border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/60 text-slate-700 dark:text-slate-300'
+                          ? 'border-[#0a66c2] bg-[#edf3f8] text-[#0a66c2] ring-1 ring-[#0a66c2]'
+                          : 'border-slate-200 hover:bg-slate-50 text-slate-700'
                       }`}
                     >
                       <div>
@@ -1301,12 +1395,12 @@ export default function ChatPage() {
                             {item.key}
                           </span>
                         </div>
-                        <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                        <p className="text-[11px] text-slate-500 mt-0.5">
                           {item.desc}
                         </p>
                       </div>
                       {isSelected && (
-                        <CheckCircle2 className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0 mt-0.5" />
+                        <CheckCircle2 className="w-4 h-4 text-[#0a66c2] shrink-0 mt-0.5" />
                       )}
                     </button>
                   );
@@ -1316,7 +1410,7 @@ export default function ChatPage() {
 
             {/* Optional Comment Input */}
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+              <label className="text-xs font-bold text-slate-700">
                 Ghi chú chi tiết thêm (tùy chọn):
               </label>
               <textarea
@@ -1324,21 +1418,21 @@ export default function ChatPage() {
                 placeholder="Ví dụ: Quy định công tác phí hiện nay đã tăng lên 650.000đ/ngày theo quyết định 2026..."
                 value={feedbackComment}
                 onChange={(e) => setFeedbackComment(e.target.value)}
-                className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-white"
+                className="w-full p-3 rounded-lg border border-slate-200 bg-slate-50 text-xs focus:outline-none focus:border-[#0a66c2] text-[#191919]"
               />
             </div>
 
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
               <button
                 onClick={() => setFeedbackModalMessage(null)}
-                className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-semibold text-slate-600 hover:bg-slate-100 cursor-pointer"
+                className="px-4 py-2 rounded-md border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-100 cursor-pointer"
               >
                 Hủy bỏ
               </button>
               <button
                 onClick={submitDislikeFeedback}
                 disabled={isSubmittingFeedback}
-                className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-semibold shadow-sm transition cursor-pointer"
+                className="px-4 py-2 rounded-md bg-[#0a66c2] hover:bg-[#004182] disabled:opacity-50 text-white text-xs font-semibold shadow-xs transition cursor-pointer"
               >
                 {isSubmittingFeedback ? 'Đang gửi...' : 'Gửi phản hồi'}
               </button>
@@ -1352,15 +1446,15 @@ export default function ChatPage() {
       {/* ======================================================== */}
       {qualityDashboardOpen && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-4xl w-full max-h-[90vh] flex flex-col shadow-2xl animate-in fade-in zoom-in-95 overflow-hidden">
+          <div className="bg-white border border-[#e0dfdc] rounded-2xl max-w-4xl w-full max-h-[90vh] flex flex-col shadow-2xl animate-in fade-in zoom-in-95 overflow-hidden">
             {/* Modal Header */}
-            <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/70 dark:bg-slate-950/40">
+            <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-sm">
+                <div className="w-8 h-8 rounded-md bg-[#0a66c2] text-white flex items-center justify-center shadow-xs">
                   <BarChart3 className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-base text-slate-900 dark:text-white">
+                  <h3 className="font-bold text-base text-[#191919]">
                     Kiểm soát Chất lượng Tri thức (Knowledge Quality Assurance)
                   </h3>
                   <p className="text-xs text-slate-500">
@@ -1370,7 +1464,7 @@ export default function ChatPage() {
               </div>
               <button
                 onClick={() => setQualityDashboardOpen(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 cursor-pointer"
+                className="p-1 rounded-md text-slate-400 hover:text-slate-600 cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1380,7 +1474,7 @@ export default function ChatPage() {
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
               {isLoadingQuality ? (
                 <div className="text-center py-12 text-slate-400">
-                  <RefreshCw className="w-8 h-8 mx-auto animate-spin mb-2 text-indigo-600" />
+                  <RefreshCw className="w-8 h-8 mx-auto animate-spin mb-2 text-[#0a66c2]" />
                   <p className="text-xs">Đang tải chỉ số chất lượng...</p>
                 </div>
               ) : (
@@ -1388,17 +1482,17 @@ export default function ChatPage() {
                   {/* Top Metrics Grid */}
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     {/* Satisfaction Rate */}
-                    <div className="p-4 rounded-2xl border border-indigo-100 dark:border-indigo-900/60 bg-indigo-50/40 dark:bg-indigo-950/30">
-                      <div className="text-[11px] font-bold text-indigo-700 dark:text-indigo-300 uppercase tracking-wider mb-1 flex items-center gap-1">
+                    <div className="p-4 rounded-xl border border-[#0a66c2]/20 bg-[#edf3f8]">
+                      <div className="text-[11px] font-bold text-[#0a66c2] uppercase tracking-wider mb-1 flex items-center gap-1">
                         <TrendingUp className="w-3.5 h-3.5" />
                         Tỷ lệ hài lòng
                       </div>
-                      <div className="text-2xl font-black text-indigo-950 dark:text-indigo-100">
+                      <div className="text-2xl font-black text-[#0a66c2]">
                         {feedbackStats?.satisfactionRate || '100%'}
                       </div>
-                      <div className="mt-2 w-full bg-indigo-200/60 dark:bg-indigo-900/60 h-1.5 rounded-full overflow-hidden">
+                      <div className="mt-2 w-full bg-[#0a66c2]/20 h-1.5 rounded-full overflow-hidden">
                         <div
-                          className="bg-indigo-600 h-full rounded-full transition-all duration-500"
+                          className="bg-[#0a66c2] h-full rounded-full transition-all duration-500"
                           style={{
                             width: feedbackStats?.satisfactionRate || '100%',
                           }}

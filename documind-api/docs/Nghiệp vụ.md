@@ -100,35 +100,53 @@ Hệ thống DocuMind AI gồm 3 Human Actors và 2 System Actors:
 Đây là đối tượng đông đảo nhất trong doanh nghiệp. Mục tiêu của họ là lấy thông tin chính xác nhanh nhất mà không phải mở từng file tài liệu.
 
 Mã UC	Tên Use Case	Mô tả chi tiết hành động
-UC-1.0	Kiểm tra quyền truy cập tài liệu (Pre-auth Check)	QUAN TRONG: Áp dụng ngầm định trước mọi UC-1.x. Hệ thống xác thực JWT token, trích xuất user.roles và user.department_id. Mọi truy vấn Vector DB đều bị giới hạn bởi metadata filter: chi tim trong tap vector co allowed_roles chua user.role. Ngan ngua rui ro lo du lieu nhay cam.
-UC-1.1	Dang nhap & Xac thuc	Dang nhap qua tai khoan noi bo (SSO / Google Workspace / Email cong ty) de nhan JWT token. He thong ho tro ca OAuth2/SAML (SSO) va Email+Password. User duoc tao tu dong qua SSO se co role mac dinh la Employee; System Admin can phan quyen nang cao thu cong.
-UC-1.2	Hoi dap tri thuc tu nhien (Chat)	Go cau hoi dang hoi thoai. He thong thuc hien: (1) Query Rewriting – ket hop lich su 2-3 luot chat + cau hoi hien tai thanh 1 query doc lap du ngu canh; (2) Hybrid Search (Vector + Full-text voi RBAC Filter); (3) Truyen ket qua cho LLM sinh cau tra loi.
-UC-1.3	Nhan cau tra loi theo thoi gian thuc (Streaming)	He thong su dung Server-Sent Events (SSE) de stream tung token chu ve giao dien nguoi dung. Sau khi hoan tat toan bo van ban, he thong gui them payload chua sources (trich dan), token_used, va confidence_level.
-UC-1.4	Kiem tra nguon trich dan (Citations)	Bam vao nguon dinh kem duoi cau tra loi de xem chinh xac: ten tep, so trang, doan van ban goc duoc trich dan.
-UC-1.5	Tim kiem ngu nghia (Hybrid Search)	Nhap tu khoa hoac y tuong chung de he thong tra ve danh sach cac tep tai lieu lien quan nhat. He thong su dung Hybrid Search (Vector + Full-text) nen tim duoc ca tu khoa chinh xac (ma lo ERR_504) lan ngu nghia tuong dong.
-UC-1.6	Danh gia chat luong cau tra loi (Feedback)	Bam Like/Dislike hoac bao cao thong tin sai/loi thoi. Du lieu feedback duoc luu vao bang feedback_logs, Knowledge Manager co the xem Dashboard de biet cac cau tra loi co ty le dislike cao va can cap nhat tai lieu.
-UC-1.7	Quan ly lich su hoi thoai	Xem lai cac phien chat cu, tao chu de chat moi hoac tai ve noi dung tom tat phien lam viec.
+UC-1.0	Kiểm tra quyền truy cập tài liệu (Pre-auth Check)	QUAN TRONG: Áp dụng ngầm định trước mọi UC-1.x. Hệ thống xác thực JWT token, trích xuất user.roles và user.department_id. Mọi truy vấn Vector DB đều bị giới hạn bởi metadata filter: chỉ tìm trong tập vector có allowed_roles chứa user.role. Ngăn ngừa rủi ro lộ dữ liệu nhạy cảm.
+
+UC-1.1	Đăng nhập & Xác thực	Đăng nhập qua tài khoản nội bộ (SSO / Google Workspace / Email công ty) để nhận JWT token. Hệ thống hỗ trợ cả OAuth2/SAML (SSO) va Email+Password. User được tạo tự động qua SSO sẽ có role mặc định là Employee; System Admin cần phân quyền nâng cao thủ công.
+
+UC-1.2	Hỏi đáp tri thức tự nhiên (Chat)	Gõ câu hỏi đang hội thoại. Hệ thống thực hiện: (1) Query Rewriting – kết hợp lịch sử 2-3 lượt chat + câu hỏi hiện tại thành 1 query độc lập đủ ngữ cảnh; (2) Hybrid Search (Vector + Full-text với RBAC Filter); (3) Truyền kết quả cho LLM sinh câu trả lời.
+
+UC-1.3	Nhận câu trả lời theo thời gian thực (Streaming)	Hệ thống sử dụng Server-Sent Events (SSE) để stream từng token chu về giao diện người đùng. Sau khi hoàn tất toàn bộ văn bản, hệ thống gửi thêm payload chưa sources (trích dẫn), token_used, và confidence_level.
+
+UC-1.4	Kiểm tra nguồn trích dẫn (Citations)	Bám vào nguồn đính kèm dưới câu trả lời để xem chính xác: tên tệp, số trang, đoạn văn bản gốc được trích dẫn.
+
+UC-1.5	Tìm kiếm ngữ nghĩa (Hybrid Search)	Nhập từ khóa và ý tưởng chung để hệ thống trả về danh sách các tệp tài liệu liên quan nhất. Hệ thống sử dụng Hybrid Search (Vector + Full-text) nên tìm đc cả từ khoá chính xác (mã lỗi ERR_504) lẫn ngữ nghĩa tương đồng.
+
+UC-1.6	Đánh giá chất lượng câu trả lời (Feedback)	Bam Like/Dislike hoặc báo cáo thông itn sai/lỗi thời. Dữ liệu feedback được lưu vào bảng feedback_logs, Knowledge Manager co thể xem Dashboard để biết các câu trả lời có tỷ lệ dislike cao và cần cập nhật tài liệu.
+
+UC-1.7	Quản lý lịch sử hội thoại	Xem lại các phiên chat cũ, tạo chủ đề chat mới hoặc tải về nội dung tóm tắt phiên làm việc.
 
 4.3. Actor 2: Quản trị viên tri thức (Knowledge Manager)
 Đây là các trưởng phòng ban hoặc người phụ trách tài liệu nội bộ. Chịu trách nhiệm về chất lượng, tính cập nhật và quyền hạn của các tệp tài liệu.
 
 Mã UC	Tên Use Case	Mô tả chi tiết hành động
-UC-2.1	Tai len & Nap tai lieu (Upload & Ingest)	Keo tha tai lieu (PDF, DOCX, TXT, MD). Backend tu dong kich hoat pipeline: (1) Luu file goc vao MinIO/S3; (2) Dua vao hang doi BullMQ; (3) Worker doc file, be nho thanh chunks, tao embedding, luu vao pgvector kem metadata day du.
-UC-2.2	Tieu chuan file duoc chap nhan	- Dinh dang: PDF (text-based), DOCX, TXT, Markdown (.md). PDF scan (anh chup) can bat OCR thi System Admin kich hoat rieng.\n- Dung luong: Toi da 20MB moi file.\n- So trang: Khuyen nghi duoi 300 trang de tranh Worker bi timeout.\n- File bi khoa (password-protected): Huy, bao loi cho nguoi dung.
-UC-2.3	Theo doi trang thai nap du lieu	Giam sat trang thai xu ly tung file qua Dashboard:\nUPLOADING -> PROCESSING -> INDEXED (thanh cong)\n                        -> FAILED (loi dinh dang / het bo nho) -> Retry (toi da 3 lan)\n                        -> ARCHIVED (luu tru)\n                        -> DELETED (xoa hoan toan)
-UC-2.4	Gan nhan & Phan vung du lieu (Tagging)	Gan the tai lieu theo phong ban hoac du an (HR, Engineering, Finance, Project-X) de phuc vu tim kiem theo pham vi va phan quyen RBAC.
-UC-2.5	Cap nhat & Xoa du lieu loi thoi	Xoa hoac thay the tai lieu cu. Khi tai lieu chuyen sang ARCHIVED/DELETED, he thong tu dong kich hoat Background Job xoa sach toan bo vector chunks tuong ung trong pgvector (hoac gan co is_active=false). Dam bao AI khong su dung du lieu cu de tra loi sai.
-UC-2.6	Phan quyen truy cap tai lieu (Document RBAC)	Cai dat quyen cho tung tai lieu: allowed_roles, allowed_departments, sensitivity_level. Vi du: Tai lieu luong chi HR+ADMIN; tai lieu ky thuat chi Engineering. Quyen nay anh huong truc tiep den Metadata Filter khi query Vector DB (UC-1.0).
-UC-2.7	Xem Feedback Dashboard	Xem danh sach cac cau tra loi bi Dislike hoac bao cao sai. Tuy chinh, xoa tai lieu loi thoi hoac tai len phien ban moi de cai thien chat luong.
+UC-2.1	Tải lên và nạp tài liệu (Upload & Ingest)	Kéo thả tài liệu (PDF, DOCX, TXT, MD). Backend tự động kích hoạt pipeline: (1) Lưu file gốc vào MinIO/S3; (2) Đưa vào hàng đợi BullMQ; (3) Worker đọc file, bẻ nhỏ thành chunks, tạo embedding, lưu vào pgvector kèm metadata đầy đủ.
+
+UC-2.2	Tiêu chuẩn file được chấp nhận	- Định dạng: PDF (text-based), DOCX, TXT, Markdown (.md). PDF scan (ảnh chụp) cần bật OCR thì System Admin kích hoạt riêng. Dung lượng: Tối đa 20MB mỗi file. Số trang: Khuyến nghị dưới 300 trang để tránh Worker bị timeout. File bị khóa (password-protected): Hủy, báo lỗi cho người dùng.
+
+UC-2.3	Theo dõi trạng thái nạp dữ liệu	Giám sát trạng thái xử lý từng file qua Dashboard: UPLOADING -> PROCESSING -> INDEXED (thành công)-> FAILED (lỗi định dạng/hết bộ nhớ) -> Retry (tối đa 3 lần) -> ARCHIVED (lưu trữ) -> DELETED (xóa hoàn toàn)
+
+UC-2.4	Gán nhãn và phân vùng dữ liệu (Tagging)	Gắn thẻ tài liệu theo phòng ban hoặc dự án (HR, Engineering, Finance, Project-X) để phục vụ tìm kiếm theo phạm vi và phân quyền RBAC.
+
+UC-2.5 Cập nhật & xóa dữ liệu lỗi thời	Xóa hoặc thay thế tài liệu cũ. Khi tài liệu chuyển sang ARCHIVED/DELETED, hệ thống tự động kích hoạt  Background Job xóa sạch toàn bộ vector chunks tương ứng trong pgvector (hoặc gắn cờ is_active=false). Đảm bảo AI ko sử dụng dữ liệu cứ để trả lời sai.
+
+UC-2.6	Phân quyền truy cập tài liệu (Document RBAC)	Cài đặt quyền cho từng tài liệu: allowed_roles, allowed_departments, sensitivity_level. Ví dụ: Tài liệu lương chỉ HR
++ ADMIN; tài liệu kỹ thuật chỉ Engineering. Quyền này ảnh hưởng trực tiếp đến Metadata Filter khi query Vector DB (UC-1.0).
+
+UC-2.7	Xem Feedback Dashboard	Xem danh sách các câu trả lời bị Dislike hoặc báo cáo sai. Tùy chỉnh, xóa tài liệu lỗi thời hoặc tại lên phiên bản mới để cải thiện chất lượng.
 
 4.4. Actor 3: Quản trị viên hệ thống (System Admin / DevOps)
 
 Mã UC	Tên Use Case	Mô tả chi tiết hành động
-UC-3.1	Quan ly nguoi dung & Vai tro	Tao tai khoan, kich hoat/huy kich hoat user, phan bo quyen han (Admin, Knowledge Manager, Employee). User dang nhap qua SSO duoc tao tu dong voi role mac dinh la Employee; Admin nang quyen thu cong khi can.
-UC-3.2	Cau hinh tham so AI & Model	Thay doi mo hinh LLM (OpenAI GPT-4o-mini / Gemini Pro / Ollama local), dieu chinh temperature, system prompt, so luong chunks retrieval (top-k), do dai context window.
-UC-3.3	Bat/tat OCR cho file scan	Kich hoat module OCR (Tesseract / Cloud Vision API) cho cac phong ban can xu ly PDF scan/anh chup. Chi phi OCR duoc tinh rieng va hien thi trong bao cao chi phi.
-UC-3.4	Giam sat chi phi & Han muc (Quota Monitoring)	Theo doi so luong Token tieu thu hang ngay, so luot goi API, do tre phan hoi (Response Latency), chi phi OCR. Thiet lap nguong canh bao (alert) khi vuot han muc.
-UC-3.5	Xem nhat ky kiem toan (Audit Logs)	Xem log day du: Ai da truy van tai lieu nao, thoi gian nao, ip_address, cau hoi dat ra. Phat hien cac cau hoi vi pham chinh sach bao mat noi bo.
+UC-3.1	Quản lý người dùng & Vai trò	Tạo tài khoản, kích hoạt/hủy kích hoạt user, phân bố quyền hạn (Admin, Knowledge Manager, Employee). User đăng nhập qua SSO được tạo tự động với role mặc định là Employee; Admin nâng quyền thủ công khi cần.
+
+UC-3.2	Cấu hình tham số AI & Model	Thay đổi mô hình LLM (OpenAI GPT-4o-mini / Gemini Pro / Ollama local), điều chỉnh temperature, system prompt, số lượng chunks retrieval (top-k), độ dài context window.
+
+UC-3.3	Bật/tắt OCR cho file scan	Kích hoạt module OCR (Tesseract / Cloud Vision API) cho các phòng ban cần xử lý PDF scan/ảnh chụp. Chi phí OCR được tính riêng và hiển thị trong báo cáo chi phí.
+
+UC-3.4	Giám sát chi phí & Hạn mức (Quota Monitoring)	Theo dõi số lương Token tiêu thụ hàng ngày, số lượt gọi API, độ trễ phản hồi (Response Latency), chi phí OCR. Thiết lập ngưỡng cảnh báo (alert) khi vượt hạn mức.
+
+UC-3.5	Xem nhật ký kiểm toán (Audit Logs)	Xem log đầy đủ: Ai đã truy vấn tài liệu nào, thời gian nào, ip_address, câu hỏi đặt ra. Phát hiện các câu hỏi vi phạm chính sách bảo mật nội bộ.
 
 5. Luồng vận hành toàn cảnh (End-to-End Workflow)
 Bước 1: Nạp dữ liệu (Knowledge Manager)
@@ -160,24 +178,24 @@ Bước 5: Giám sát (System Admin)
 6. Quy chuẩn File Parsing & Giới hạn hệ thống
 
 Hạng mục	Quy định	Lý do
-Dinh dang ho tro	PDF (text-based), DOCX, TXT, Markdown (.md)	File scan/anh can OCR bat rieng
-Dung luong toi da	20MB moi file	Tranh Worker timeout, het RAM
-So trang khuyen nghi	Duoi 300 trang	Pipeline chay on dinh
-File bi khoa mat khau	Tu choi, bao loi ro rang cho nguoi dung	Khong the doc noi dung
-Bang bieu trong file	Chuyen sang Markdown/JSON truoc khi chunk	Tranh cat gay bang, LLM doc sai so lieu
-PDF scan (anh chup)	Can bat module OCR (Tesseract / Cloud Vision)	Phu thuoc kich hoat cua System Admin
-Encoding file text	Chi chap nhan UTF-8	Tranh loi ma hoa ky tu tieng Viet
+Định dạng hỗ trợ	PDF (text-based), DOCX, TXT, Markdown (.md)	File scan/anh can OCR bắt riêng
+Dung lượng tối đa	20MB moi file	Tranh Worker timeout, het RAM
+Số trang khuyến nghị	Dưới 300 trang	Pipeline chạy ổn định
+File bị khóa mật khẩu	Từ chối, báo lỗi rõ ràng cho người dùng	Không thể đọc nội dung
+Bảng biểu trong file	Chuyển sang Markdown/JSON trước khi chunk	Tránh cắt gãy bảng, LLM đọc sai số liệu
+PDF scan (ảnh chụp)	Cần bật module OCR (Tesseract / Cloud Vision)	Phụ thuộc kích hoạt của System Admin
+Encoding file text	Chỉ chấp nhận UTF-8	Tránh lỗi mã hóa ký tự tiếng Việt
 
 7. Vòng đời tài liệu (Document Lifecycle)
 Mỗi tài liệu trong hệ thống trải qua các trạng thái sau:
 
 UPLOADING → PROCESSING → INDEXED   (Thanh cong)
-                      → FAILED     (Loi – tu dong retry toi da 3 lan)
+                       → FAILED     (Loi – tu dong retry toi da 3 lan)
 INDEXED   → ARCHIVED  (Knowledge Manager an/luu tru tai lieu cu)
 ARCHIVED  → DELETED   (Xoa vinh vien)
 
 Quy tắc dọn dẹp Vector khi tài liệu bị ARCHIVED/DELETED:
-He thong tu dong kich hoat Background Job (BullMQ) xoa toan bo vector chunks co document_id tuong ung trong pgvector (hoac gan co is_active=false neu muon giu lich su). Dam bao AI khong su dung du lieu cu de tra loi sai lech.
+Hệ thống tự động kich hoạt Background Job (BullMQ) xóa toàn bộ vector chunks có document_id tương ứng trong pgvector (hoặc gắn cờ is_active=false nếu muốn giữ lịch sử). Đảm bảo AI không sử dụng dữ liệu cũ để trả lời sai lệch.
 
 8. Cấu trúc dự án (Project Structure – Modular Architecture)
 Cấu trúc dự án DocuMind AI được tổ chức theo mô hình Modular Architecture bằng NestJS / TypeScript. Thiết kế này tách biệt rõ ràng giữa các domain/feature, dễ bảo trì và scale.
@@ -264,15 +282,15 @@ documind-app/
             └── metrics.service.ts      # Token usage, audit log, cost tracking
 
 9. Tóm tắt Use Case theo mức độ ưu tiên
-Muc do	Vien de	Use Case lien quan	Hanh dong
-Nghiem trong	RBAC khong khep kin voi Query Engine	UC-1.0 (moi), UC-2.6	Bo sung Metadata Filtering bat buoc
-Quan trong	Thieu Multi-turn Chat	UC-1.2 (cap nhat)	Them buoc Query Rewriting
-Quan trong	Thieu Streaming Response	UC-1.3 (moi)	Them SSE endpoint /chat/query/stream
-Quan trong	Document Lifecycle chua day du trang thai	UC-2.3 (cap nhat)	Bo sung ARCHIVED, DELETED, Cleanup Job
-Quan trong	Thieu quy chuan File Parsing	UC-2.2 (moi)	Them bang quy chuan file ho tro
-Quan trong	Thieu Hybrid Search	UC-1.5 (cap nhat)	Ket hop Vector + Full-text Search + RRF
-Nho	Co che tao tai khoan qua SSO chua ro	UC-1.1, UC-3.1 (cap nhat)	Lam ro flow OAuth2/SAML & role mac dinh
-Nho	Luong xu ly Feedback chua ro	UC-1.6, UC-2.7 (cap nhat/moi)	Mo ta ro Feedback Dashboard
+Mức độ	Vien de	Use Case liên quan	Hành động
+Nghiêm trọng	RBAC không khép kín với Query Engine	UC-1.0 (mới), UC-2.6	Bổ sung Metadata Filtering bắt buộc
+Quan trọng	Thiếu Multi-turn Chat	UC-1.2 (cập nhật)	Thêm bước Query Rewriting
+Quan trong	Thiếu Streaming Response	UC-1.3 (mới)	Thêm SSE endpoint /chat/query/stream
+Quan trong	Document Lifecycle chưa đầy đủ trạng thái	UC-2.3 (cập nhật)	Bổ sung ARCHIVED, DELETED, Cleanup Job
+Quan trọng	Thiếu quy chuẩn File Parsing	UC-2.2 (mới)	Thêm bảng quy chuẩn file hỗ trợ
+Quan trọng	Thiếu Hybrid Search	UC-1.5 (cập nhật)	Kết hợp Vector + Full-text Search + RRF
+Nhờ	Cơ chế tạo tài khoản qua SSO chưa rõ	UC-1.1, UC-3.1 (cập nhật)	Làm rõ flow OAuth2/SAML & role mặc định
+Nhờ	Lượng xử lý Feedback chưa rõ	UC-1.6, UC-2.7 (cập nhật/mới)	Mô tả rõ Feedback Dashboard
 
 
 

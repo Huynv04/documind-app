@@ -56,6 +56,20 @@ const DEPARTMENTS = [
   'Pháp chế & Tuân thủ',
 ];
 
+/**
+ * Kiểm tra tệp tin có phải là UTF-8 hợp lệ không (tối giản, chuẩn xác nhất)
+ */
+async function isUtf8File(file: File): Promise<boolean> {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  if (bytes.includes(0x00)) return false; // UTF-16 và nhị phân luôn chứa byte null 0x00
+  try {
+    new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    return true; // Giải mã UTF-8 nghiêm ngặt thành công
+  } catch {
+    return false; // Ném lỗi nếu gặp UTF-16 BE, LE, UTF-32 hoặc byte không hợp lệ
+  }
+}
+
 export default function DocumentsPage() {
   const { user, isLoading: isAuthLoading } = useAuth();
   const router = useRouter();
@@ -88,6 +102,7 @@ export default function DocumentsPage() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [isRetryingId, setIsRetryingId] = useState<string | null>(null);
 
   // Drag & drop
@@ -238,7 +253,8 @@ export default function DocumentsPage() {
         err instanceof ApiError
           ? err.messages.join(' | ')
           : 'Lỗi khi kích hoạt thử lại nạp tệp';
-      alert(errorMsg);
+      setActionError(errorMsg);
+      setTimeout(() => setActionError(null), 6000);
     } finally {
       setIsRetryingId(null);
     }
@@ -255,26 +271,48 @@ export default function DocumentsPage() {
     setIsDragging(false);
   };
 
-  const handleDrop = (e: React.DragEvent) => {
+  const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      handleFileSelected(e.dataTransfer.files[0]);
+      await handleFileSelected(e.dataTransfer.files[0]);
     }
   };
 
-  const handleFileSelected = (file: File) => {
+  const handleFileSelected = async (file: File) => {
     const validExtensions = /\.(pdf|docx|doc|md|txt)$/i;
     if (!validExtensions.test(file.name)) {
-      setUploadError('Chỉ hỗ trợ tệp định dạng: PDF (text-based), DOCX, DOC, Markdown (.md), Text (.txt)');
+      const msg = `Định dạng tệp "${file.name}" không được hỗ trợ. Hệ thống chỉ chấp nhận: PDF (text-based), Word (.docx, .doc), Markdown (.md), Text (.txt).`;
+      setActionError(msg);
+      setUploadError(msg);
+      setTimeout(() => setActionError(null), 7000);
       return;
     }
     if (file.size > 20 * 1024 * 1024) {
-      setUploadError('Dung lượng tệp vượt quá giới hạn 20MB theo quy định');
+      const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
+      const msg = `Dung lượng tệp "${file.name}" (${sizeMB} MB) vượt quá giới hạn tối đa 20MB. Vui lòng nén hoặc chia nhỏ tệp tin.`;
+      setActionError(msg);
+      setUploadError(msg);
+      setTimeout(() => setActionError(null), 7000);
       return;
     }
+
+    // Kiểm tra bảng mã UTF-8 đối với tệp văn bản (TXT, Markdown)
+    if (/\.(txt|md|markdown)$/i.test(file.name) || file.type.startsWith('text/')) {
+      const isValidUtf8 = await isUtf8File(file);
+      if (!isValidUtf8) {
+        const msg = `Tệp văn bản "${file.name}" không đúng chuẩn UTF-8 (phát hiện bảng mã UTF-16 hoặc không hợp lệ). Hệ thống chỉ chấp nhận bảng mã UTF-8 để bảo toàn ký tự tiếng Việt.`;
+        setActionError(msg);
+        setUploadError(msg);
+        setSelectedFile(null);
+        setTimeout(() => setActionError(null), 7000);
+        return;
+      }
+    }
+
     setSelectedFile(file);
     setUploadError(null);
+    setActionError(null);
     setIsUploadOpen(true);
   };
 
@@ -282,6 +320,17 @@ export default function DocumentsPage() {
   const handleUploadSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedFile) return;
+
+    // Kiểm tra bảo vệ bổ sung trước khi đẩy lên Backend
+    if (/\.(txt|md|markdown)$/i.test(selectedFile.name) || selectedFile.type.startsWith('text/')) {
+      const isValidUtf8 = await isUtf8File(selectedFile);
+      if (!isValidUtf8) {
+        const msg = `Tệp văn bản "${selectedFile.name}" không đúng chuẩn UTF-8 (phát hiện bảng mã UTF-16 hoặc không hợp lệ). Hệ thống chỉ chấp nhận bảng mã UTF-8 để bảo toàn ký tự tiếng Việt.`;
+        setUploadError(msg);
+        setActionError(msg);
+        return;
+      }
+    }
 
     setIsUploading(true);
     setUploadProgress(0);
@@ -316,11 +365,13 @@ export default function DocumentsPage() {
       refreshList();
       setTimeout(() => setActionSuccess(null), 5000);
     } catch (err) {
-      if (err instanceof ApiError) {
-        setUploadError(err.messages.join(' | '));
-      } else {
-        setUploadError('Không thể tải lên tệp tin. Vui lòng thử lại sau.');
-      }
+      const msg =
+        err instanceof ApiError
+          ? err.messages.join(' | ')
+          : 'Không thể tải lên tệp tin. Vui lòng thử lại sau.';
+      setUploadError(msg);
+      setActionError(msg);
+      setTimeout(() => setActionError(null), 7000);
     } finally {
       setIsUploading(false);
       setUploadProgress(null);
@@ -332,7 +383,8 @@ export default function DocumentsPage() {
     try {
       await documentApi.download(doc.id, doc.originalName);
     } catch {
-      alert('Không thể tải xuống tệp tin. Vui lòng kiểm tra lại quyền truy cập của tài khoản.');
+      setActionError('Không thể tải xuống tệp tin. Vui lòng kiểm tra lại quyền truy cập của tài khoản.');
+      setTimeout(() => setActionError(null), 6000);
     }
   };
 
@@ -348,11 +400,9 @@ export default function DocumentsPage() {
       refreshList();
       setTimeout(() => setActionSuccess(null), 4000);
     } catch (err) {
-      if (err instanceof ApiError) {
-        alert(err.messages.join(' | '));
-      } else {
-        alert('Lỗi khi xóa tài liệu.');
-      }
+      const msg = err instanceof ApiError ? err.messages.join(' | ') : 'Lỗi khi xóa tài liệu.';
+      setActionError(msg);
+      setTimeout(() => setActionError(null), 6000);
     } finally {
       setIsDeleting(false);
     }
@@ -463,14 +513,14 @@ export default function DocumentsPage() {
 
   if (isAuthLoading || !user) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-900 text-white">
-        <div className="w-8 h-8 border-3 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+      <div className="min-h-screen flex items-center justify-center bg-white text-slate-900">
+        <div className="w-8 h-8 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans">
+    <div className="min-h-screen bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans">
       <Navbar />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-8 space-y-8">
@@ -491,6 +541,23 @@ export default function DocumentsPage() {
           </div>
         )}
 
+        {/* Action Error Alert */}
+        {actionError && (
+          <div className="p-4 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 text-rose-800 dark:text-rose-300 text-xs font-semibold flex items-center justify-between shadow-sm animate-in fade-in slide-in-from-top-2">
+            <div className="flex items-center gap-2.5">
+              <AlertCircle className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0" />
+              <span>{actionError}</span>
+            </div>
+            <button
+              onClick={() => setActionError(null)}
+              aria-label="Đóng thông báo lỗi"
+              className="text-rose-600 hover:text-rose-800 dark:text-rose-400 dark:hover:text-rose-200 cursor-pointer p-0.5"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
         {/* Page Header with Live Polling Status */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-200 dark:border-slate-800">
           <div>
@@ -501,12 +568,12 @@ export default function DocumentsPage() {
               {isLivePolling && (
                 <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800 animate-pulse">
                   <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />
-                  Đang đồng bộ hàng đợi ngầm...
+                  Đang đồng bộ tự động...
                 </span>
               )}
             </div>
             <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
-              Quản lý tài liệu và theo dõi tiến trình bóc tách, bẻ chunks và nạp vector tự động vào cơ sở dữ liệu pgvector.
+              Quản lý tài liệu và theo dõi tiến trình bóc tách văn bản, phân đoạn ngữ nghĩa và lập chỉ mục tìm kiếm thông minh.
             </p>
           </div>
 
@@ -517,7 +584,7 @@ export default function DocumentsPage() {
                 className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/80 font-semibold text-xs shadow-sm transition cursor-pointer"
               >
                 <Cpu className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                <span>Giám sát Hàng đợi</span>
+                <span>Tiến trình Xử lý</span>
               </Link>
               <button
                 onClick={() => {
@@ -565,11 +632,10 @@ export default function DocumentsPage() {
           </div>
 
           <div
-            className={`border rounded-2xl p-4 shadow-sm flex items-center justify-between transition ${
-              processingCount > 0
-                ? 'bg-amber-50/50 dark:bg-amber-950/30 border-amber-300 dark:border-amber-800'
-                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800'
-            }`}
+            className={`border rounded-2xl p-4 shadow-sm flex items-center justify-between transition ${processingCount > 0
+              ? 'bg-amber-50/50 dark:bg-amber-950/30 border-amber-300 dark:border-amber-800'
+              : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800'
+              }`}
           >
             <div>
               <span className="text-[11px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
@@ -586,11 +652,10 @@ export default function DocumentsPage() {
           </div>
 
           <div
-            className={`border rounded-2xl p-4 shadow-sm flex items-center justify-between transition ${
-              failedCount > 0
-                ? 'bg-rose-50/50 dark:bg-rose-950/30 border-rose-300 dark:border-rose-800'
-                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800'
-            }`}
+            className={`border rounded-2xl p-4 shadow-sm flex items-center justify-between transition ${failedCount > 0
+              ? 'bg-rose-50/50 dark:bg-rose-950/30 border-rose-300 dark:border-rose-800'
+              : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800'
+              }`}
           >
             <div>
               <span className="text-[11px] font-bold uppercase tracking-wider text-rose-600 dark:text-rose-400">
@@ -613,18 +678,17 @@ export default function DocumentsPage() {
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
             onClick={() => fileInputRef.current?.click()}
-            className={`border-2 border-dashed rounded-3xl p-8 text-center transition-all cursor-pointer ${
-              isDragging
-                ? 'border-indigo-500 bg-indigo-500/10 scale-[1.005]'
-                : 'border-slate-300 dark:border-slate-800 bg-white/60 dark:bg-slate-900/40 hover:border-indigo-400 shadow-sm'
-            }`}
+            className={`border-2 border-dashed rounded-3xl p-8 text-center transition-all cursor-pointer ${isDragging
+              ? 'border-indigo-500 bg-indigo-500/10 scale-[1.005]'
+              : 'border-slate-300 dark:border-slate-800 bg-white/60 dark:bg-slate-900/40 hover:border-indigo-400 shadow-sm'
+              }`}
           >
             <input
               type="file"
               ref={fileInputRef}
-              onChange={(e) => {
+              onChange={async (e) => {
                 if (e.target.files && e.target.files.length > 0) {
-                  handleFileSelected(e.target.files[0]);
+                  await handleFileSelected(e.target.files[0]);
                 }
               }}
               className="hidden"
@@ -640,7 +704,7 @@ export default function DocumentsPage() {
               </span>
             </h3>
             <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto">
-              Hỗ trợ: PDF (text-based), Word (.docx, .doc), Markdown (.md), Text (.txt) • Dung lượng tối đa: 20MB theo quy chuẩn UC-2.2
+              Hỗ trợ: PDF (text-based), Word (.docx, .doc), Markdown (.md), Text (.txt) • Dung lượng tối đa: 20MB
             </p>
           </div>
         )}
@@ -841,9 +905,8 @@ export default function DocumentsPage() {
                               className="inline-flex items-center gap-1 py-1 px-2 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20 text-xs font-semibold transition cursor-pointer disabled:opacity-50"
                             >
                               <RotateCw
-                                className={`w-3.5 h-3.5 ${
-                                  isRetryingId === doc.id ? 'animate-spin' : ''
-                                }`}
+                                className={`w-3.5 h-3.5 ${isRetryingId === doc.id ? 'animate-spin' : ''
+                                  }`}
                               />
                               <span>Thử lại</span>
                             </button>
@@ -1096,9 +1159,9 @@ export default function DocumentsPage() {
                   <input
                     type="file"
                     required
-                    onChange={(e) => {
+                    onChange={async (e) => {
                       if (e.target.files && e.target.files.length > 0) {
-                        handleFileSelected(e.target.files[0]);
+                        await handleFileSelected(e.target.files[0]);
                       }
                     }}
                     accept=".pdf,.docx,.doc,.md,.txt"
@@ -1139,11 +1202,10 @@ export default function DocumentsPage() {
                       key={level}
                       type="button"
                       onClick={() => setSensitivity(level)}
-                      className={`py-2 px-3 rounded-xl border text-xs font-bold transition cursor-pointer ${
-                        sensitivity === level
-                          ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 ring-1 ring-indigo-500'
-                          : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300'
-                      }`}
+                      className={`py-2 px-3 rounded-xl border text-xs font-bold transition cursor-pointer ${sensitivity === level
+                        ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 ring-1 ring-indigo-500'
+                        : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300'
+                        }`}
                     >
                       {level}
                     </button>
@@ -1172,11 +1234,10 @@ export default function DocumentsPage() {
                             setAllowedRoles([...allowedRoles, role]);
                           }
                         }}
-                        className={`py-1.5 px-3 rounded-xl border text-xs font-semibold transition cursor-pointer ${
-                          isChecked
-                            ? 'bg-indigo-600 text-white border-transparent shadow-sm'
-                            : 'border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-50'
-                        }`}
+                        className={`py-1.5 px-3 rounded-xl border text-xs font-semibold transition cursor-pointer ${isChecked
+                          ? 'bg-indigo-600 text-white border-transparent shadow-sm'
+                          : 'border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-50'
+                          }`}
                       >
                         {role}
                       </button>

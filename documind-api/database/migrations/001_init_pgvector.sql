@@ -23,7 +23,13 @@ GENERATED ALWAYS AS (to_tsvector('english', content)) STORED;
 CREATE INDEX IF NOT EXISTS idx_chunks_content_fts
 ON document_chunks USING gin(content_tsv);
 
--- 5. Index hỗ trợ filter theo document_id và is_active
-CREATE INDEX IF NOT EXISTS idx_chunks_document_active
-ON document_chunks (document_id, is_active);
+-- 5. Index hỗ trợ filter theo document_id và is_active (tự động nhận diện camelCase/snake_case)
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'document_chunks' AND column_name = 'documentId') THEN
+    CREATE INDEX IF NOT EXISTS idx_chunks_document_active ON document_chunks ("documentId", "isActive");
+  ELSE
+    CREATE INDEX IF NOT EXISTS idx_chunks_document_active ON document_chunks (document_id, is_active);
+  END IF;
+END $$;
 

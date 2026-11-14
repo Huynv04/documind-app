@@ -105,23 +105,23 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex font-sans">
+    <div className="min-h-screen bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex font-sans">
       {/* ======================================================== */}
       {/* 1. LEFT COLUMN: BRAND HERO & SECURITY VALUE PROPOSITION */}
       {/* ======================================================== */}
-      <div className="hidden lg:flex lg:w-1/2 relative bg-gradient-to-br from-indigo-950 via-slate-900 to-slate-950 text-white p-12 flex-col justify-between overflow-hidden border-r border-slate-800">
-        <div className="absolute -top-40 -left-40 w-96 h-96 bg-indigo-600/20 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-purple-600/20 rounded-full blur-3xl pointer-events-none" />
+      <div className="hidden lg:flex lg:w-1/2 relative bg-[#004182] text-white p-12 flex-col justify-between overflow-hidden border-r border-[#003366]">
+        {/* Subtle geometric grid accent */}
+        <div className="absolute inset-0 bg-[radial-gradient(#ffffff_1px,transparent_1px)] [background-size:24px_24px] opacity-10 pointer-events-none" />
 
         {/* Brand Top */}
         <div className="relative z-10">
           <div className="inline-flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-indigo-600 flex items-center justify-center text-white shadow-xl shadow-indigo-500/30">
-              <Sparkles className="w-6 h-6" />
+            <div className="w-10 h-10 rounded-md bg-[#0a66c2] flex items-center justify-center text-white shadow-sm">
+              <FileText className="w-5 h-5 text-white" />
             </div>
             <div>
               <span className="font-extrabold text-xl tracking-tight">DocuMind AI</span>
-              <span className="ml-2 px-2 py-0.5 rounded-full text-[10px] font-mono bg-white/10 text-indigo-200 border border-white/20">
+              <span className="ml-2 px-2 py-0.5 rounded text-[10px] font-semibold bg-white/15 text-white border border-white/20">
                 Identity & Access
               </span>
             </div>
@@ -130,46 +130,46 @@ export default function RegisterPage() {
 
         {/* Center Presentation: Employee Onboarding Highlights */}
         <div className="relative z-10 space-y-6 max-w-lg my-auto py-8">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-indigo-500/10 text-indigo-300 border border-indigo-500/30">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-white/10 text-white border border-white/20">
             <ShieldCheck className="w-4 h-4 text-emerald-400" />
             Đăng ký Tài khoản Nhân viên Nội bộ
           </div>
 
           <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight leading-tight">
             Khám phá kho tri thức doanh nghiệp. <br />
-            <span className="bg-gradient-to-r from-indigo-400 via-sky-300 to-purple-300 bg-clip-text text-transparent">
+            <span className="text-sky-300">
               Rút ngắn 80% thời gian tra cứu.
             </span>
           </h2>
 
-          <p className="text-sm text-slate-300 leading-relaxed">
-            Tài khoản mới được kích hoạt ngầm định với vai trò <code className="bg-white/10 px-1.5 py-0.5 rounded font-mono text-xs text-indigo-300">EMPLOYEE</code> và gắn liền với phòng ban chuyên môn để tra cứu quy chế, SOP và sổ tay nghiệp vụ.
+          <p className="text-sm text-slate-200 leading-relaxed">
+            Tài khoản mới được cấp quyền tự động theo phòng ban chuyên môn để tra cứu quy chế, quy trình chuẩn (SOP) và tài liệu nội bộ với bảo mật cao nhất.
           </p>
 
           <div className="space-y-3 pt-2">
-            <div className="flex items-start gap-3 p-3.5 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-sm">
-              <div className="w-8 h-8 rounded-xl bg-purple-500/20 text-purple-400 flex items-center justify-center shrink-0 mt-0.5">
+            <div className="flex items-start gap-3 p-3.5 rounded-xl bg-white/10 border border-white/15 backdrop-blur-sm">
+              <div className="w-8 h-8 rounded-lg bg-sky-400/20 text-sky-300 flex items-center justify-center shrink-0 mt-0.5">
                 <FileText className="w-4 h-4" />
               </div>
               <div className="text-xs">
                 <strong className="text-white block font-semibold mb-0.5">
                   Tự động phân vùng tài liệu theo phòng ban
                 </strong>
-                <span className="text-slate-400 leading-relaxed">
+                <span className="text-slate-200 leading-relaxed">
                   Chỉ nhìn thấy và truy vấn các văn bản đúng thẩm quyền và trách nhiệm công việc của bạn.
                 </span>
               </div>
             </div>
 
-            <div className="flex items-start gap-3 p-3.5 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-sm">
-              <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
+            <div className="flex items-start gap-3 p-3.5 rounded-xl bg-white/10 border border-white/15 backdrop-blur-sm">
+              <div className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
                 <LockKeyhole className="w-4 h-4" />
               </div>
               <div className="text-xs">
                 <strong className="text-white block font-semibold mb-0.5">
-                  Bảo vệ mật khẩu với thuật toán Bcrypt Salted Hash
+                  Bảo mật tài khoản doanh nghiệp chuẩn ISO
                 </strong>
-                <span className="text-slate-400 leading-relaxed">
+                <span className="text-slate-200 leading-relaxed">
                   Thông tin đăng nhập được mã hóa an toàn và xác thực qua JWT token có thời hạn.
                 </span>
               </div>
@@ -178,9 +178,9 @@ export default function RegisterPage() {
         </div>
 
         {/* Footer info */}
-        <div className="relative z-10 pt-4 border-t border-white/10 flex items-center justify-between text-xs text-slate-400">
+        <div className="relative z-10 pt-4 border-t border-white/15 flex items-center justify-between text-xs text-slate-300">
           <span>Quy chế An toàn Thông tin Doanh nghiệp</span>
-          <span className="font-mono">RBAC Enabled</span>
+          <span className="font-semibold text-white/80">RBAC Enabled</span>
         </div>
       </div>
 
@@ -392,11 +392,11 @@ export default function RegisterPage() {
                 id="terms"
                 checked={agreedTerms}
                 onChange={(e) => setAgreedTerms(e.target.checked)}
-                className="mt-0.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                className="mt-0.5 rounded border-slate-300 text-[#0a66c2] focus:ring-[#0a66c2] cursor-pointer"
               />
               <label
                 htmlFor="terms"
-                className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed cursor-pointer"
+                className="text-xs text-slate-600 leading-relaxed cursor-pointer"
               >
                 Tôi đồng ý tuân thủ quy chế xử lý dữ liệu và cam kết không phát tán tài liệu mật nội bộ ra bên ngoài.
               </label>
@@ -406,7 +406,7 @@ export default function RegisterPage() {
             <button
               type="submit"
               disabled={isSubmitting || !isPasswordValid || !passwordsMatch || !agreedTerms}
-              className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs transition shadow-md shadow-indigo-500/25 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.99] cursor-pointer mt-2"
+              className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-lg bg-[#0a66c2] hover:bg-[#004182] text-white font-semibold text-xs transition shadow-sm disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.99] cursor-pointer mt-2"
             >
               {isSubmitting ? (
                 <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -420,11 +420,11 @@ export default function RegisterPage() {
           </form>
 
           {/* Footer Navigation */}
-          <div className="text-center text-xs text-slate-500 dark:text-slate-400">
+          <div className="text-center text-xs text-slate-500">
             Đã có tài khoản nhân viên?{' '}
             <Link
               href="/login"
-              className="text-indigo-600 dark:text-indigo-400 font-bold hover:underline"
+              className="text-[#0a66c2] font-bold hover:underline"
             >
               Đăng nhập ngay
             </Link>

@@ -74,6 +74,17 @@ export class DocumentService {
       );
     }
 
+    // 2.1 Kiểm tra bảng mã đối với tệp văn bản (TXT, Markdown) theo quy chuẩn Mục 6 Nghiệp vụ
+    const isTextFile =
+      file.mimetype === 'text/plain' ||
+      file.mimetype === 'text/markdown' ||
+      file.mimetype === 'text/x-markdown' ||
+      /\.(txt|md|markdown)$/i.test(file.originalname);
+
+    if (isTextFile) {
+      this.validateTextFileEncoding(file.buffer);
+    }
+
     // 3. Lưu trữ tệp vào Storage (Local hoặc MinIO/S3)
     const storagePath = await this.storageService.uploadFile(
       file.buffer,
@@ -400,6 +411,30 @@ export class DocumentService {
    */
   private getParser(mimeType: string, filename?: string): DocumentParser | undefined {
     return this.parsers.find((p) => p.supports(mimeType, filename));
+  }
+
+  /**
+   * Kiểm tra định dạng mã hóa ký tự (Encoding) cho các tệp văn bản (TXT, Markdown).
+   * Tối giản & chuẩn xác nhất: Chỉ chấp nhận bảng mã UTF-8 nhằm tránh lỗi ký tự tiếng Việt.
+   */
+  public validateTextFileEncoding(buffer: Buffer): void {
+    if (!buffer || buffer.length === 0) return;
+
+    // 1. Tệp văn bản UTF-8 không bao giờ chứa byte null 0x00 (dấu hiệu của UTF-16 hoặc nhị phân)
+    if (buffer.includes(0x00)) {
+      throw new BadRequestException(
+        'Phát hiện ký tự null byte (0x00) đặc trưng của mã hóa UTF-16. Hệ thống chỉ chấp nhận tệp văn bản chuẩn UTF-8.',
+      );
+    }
+
+    // 2. TextDecoder({ fatal: true }) tự động ném lỗi nếu gặp byte sai chuẩn UTF-8 (UTF-16 BE, LE, UTF-32, ANSI...)
+    try {
+      new TextDecoder('utf-8', { fatal: true }).decode(buffer);
+    } catch {
+      throw new BadRequestException(
+        'Tệp văn bản không đúng chuẩn mã hóa UTF-8 (phát hiện UTF-16 hoặc bảng mã không hợp lệ). Hệ thống chỉ chấp nhận bảng mã UTF-8 để bảo toàn ký tự tiếng Việt.',
+      );
+    }
   }
 }
 

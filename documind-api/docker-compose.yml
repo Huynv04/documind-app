@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # --- 1. PostgreSQL with pgvector extension ---
   vector-db:
@@ -37,10 +35,9 @@ services:
 
   # --- 3. MinIO Object Storage (S3-compatible) ---
   minio:
-    image: minio/minio:latest
+    image: bitnamilegacy/minio:latest
     container_name: documind-minio
     restart: unless-stopped
-    command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minioadmin}
@@ -48,7 +45,7 @@ services:
       - "${MINIO_PORT:-9000}:9000"
       - "9001:9001"
     volumes:
-      - minio_data:/data
+      - minio_data:/bitnami/minio/data
 
   # --- 4. DocuMind NestJS API Service ---
   api:

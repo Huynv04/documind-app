@@ -20,7 +20,6 @@ import {
   HelpCircle,
   X,
   FileText,
-  UserCheck,
   Building2,
   KeyRound,
 } from 'lucide-react';
@@ -33,34 +32,6 @@ export default function LoginPage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [helpdeskModalOpen, setHelpdeskModalOpen] = useState(false);
-
-  // Preset demo accounts for rapid testing and review of RBAC
-  const demoAccounts = [
-    {
-      role: 'Nhân viên (Employee)',
-      email: 'user@documind.vn',
-      pass: 'Employee@123',
-      color: 'border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 bg-indigo-50/50 dark:bg-indigo-950/40',
-    },
-    {
-      role: 'Quản lý Tri thức (KM)',
-      email: 'km@documind.vn',
-      pass: 'Manager@123',
-      color: 'border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 bg-emerald-50/50 dark:bg-emerald-950/40',
-    },
-    {
-      role: 'Quản trị viên (Admin)',
-      email: 'admin@documind.vn',
-      pass: 'Admin@123',
-      color: 'border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 bg-rose-50/50 dark:bg-rose-950/40',
-    },
-  ];
-
-  const fillDemoAccount = (demoEmail: string, demoPass: string) => {
-    setEmail(demoEmail);
-    setPassword(demoPass);
-    setErrorMsg(null);
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -96,25 +67,24 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex font-sans">
+    <div className="min-h-screen bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex font-sans">
       {/* ======================================================== */}
       {/* 1. LEFT COLUMN: ENTERPRISE BRAND HERO PRESENTATION       */}
       {/* ======================================================== */}
-      <div className="hidden lg:flex lg:w-1/2 relative bg-gradient-to-br from-indigo-950 via-slate-900 to-slate-950 text-white p-12 flex-col justify-between overflow-hidden border-r border-slate-800">
-        {/* Glow ambient lights */}
-        <div className="absolute -top-40 -left-40 w-96 h-96 bg-indigo-600/20 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-purple-600/20 rounded-full blur-3xl pointer-events-none" />
+      <div className="hidden lg:flex lg:w-1/2 relative bg-[#004182] text-white p-12 flex-col justify-between overflow-hidden border-r border-[#003366]">
+        {/* Subtle geometric grid accent */}
+        <div className="absolute inset-0 bg-[radial-gradient(#ffffff_1px,transparent_1px)] [background-size:24px_24px] opacity-10 pointer-events-none" />
 
         {/* Brand Top */}
         <div className="relative z-10">
           <div className="inline-flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-indigo-600 flex items-center justify-center text-white shadow-xl shadow-indigo-500/30">
-              <Sparkles className="w-6 h-6" />
+            <div className="w-10 h-10 rounded-md bg-[#0a66c2] flex items-center justify-center text-white shadow-sm">
+              <FileText className="w-5 h-5 text-white" />
             </div>
             <div>
               <span className="font-extrabold text-xl tracking-tight">DocuMind AI</span>
-              <span className="ml-2 px-2 py-0.5 rounded-full text-[10px] font-mono bg-white/10 text-indigo-200 border border-white/20">
-                Enterprise RAG
+              <span className="ml-2 px-2 py-0.5 rounded text-[10px] font-semibold bg-white/15 text-white border border-white/20">
+                Enterprise Knowledge
               </span>
             </div>
           </div>
@@ -122,48 +92,48 @@ export default function LoginPage() {
 
         {/* Center Presentation: Core Value Propositions */}
         <div className="relative z-10 space-y-6 max-w-lg my-auto py-8">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-indigo-500/10 text-indigo-300 border border-indigo-500/30">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-white/10 text-white border border-white/20">
             <ShieldCheck className="w-4 h-4 text-emerald-400" />
-            Nền tảng Tra cứu Tri thức & Trợ lý RAG Doanh nghiệp
+            Nền tảng Tra cứu Tri thức & Trợ lý Nghiệp vụ Doanh nghiệp
           </div>
 
           <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight leading-tight">
-            Truy xuất tri thức tức thì. <br />
-            <span className="bg-gradient-to-r from-indigo-400 via-sky-300 to-purple-300 bg-clip-text text-transparent">
+            Tra cứu tri thức tức thì. <br />
+            <span className="text-sky-300">
               Chính xác từng trang tài liệu.
             </span>
           </h2>
 
-          <p className="text-sm text-slate-300 leading-relaxed">
-            DocuMind AI kết hợp tìm kiếm lai Hybrid Search (Vector pgvector + Full-text Search) với cơ chế phân quyền bảo mật tài liệu nghiêm ngặt theo phòng ban.
+          <p className="text-sm text-slate-200 leading-relaxed">
+            DocuMind AI hỗ trợ nhân viên tra cứu quy chế, quy trình chuẩn (SOP), chính sách nhân sự và tài liệu nội bộ với dẫn chứng trích dẫn rõ ràng và phân quyền bảo mật tuyệt đối.
           </p>
 
           {/* Feature Highlights Grid */}
           <div className="space-y-3 pt-2">
-            <div className="flex items-start gap-3 p-3.5 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-sm">
-              <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
+            <div className="flex items-start gap-3 p-3.5 rounded-xl bg-white/10 border border-white/15 backdrop-blur-sm">
+              <div className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-300 flex items-center justify-center shrink-0 mt-0.5">
                 <CheckCircle2 className="w-4 h-4" />
               </div>
               <div className="text-xs">
                 <strong className="text-white block font-semibold mb-0.5">
-                  Tỷ lệ ảo giác (Hallucination) $\le 1\%$
+                  Dẫn chứng trích dẫn nguyên văn
                 </strong>
-                <span className="text-slate-400 leading-relaxed">
-                  Câu trả lời được ghim chặt vào dữ liệu nội bộ và trích dẫn số trang nguyên văn.
+                <span className="text-slate-200 leading-relaxed">
+                  Mọi câu trả lời của trợ lý AI đều đối chiếu số trang và điều khoản cụ thể trong văn bản gốc.
                 </span>
               </div>
             </div>
 
-            <div className="flex items-start gap-3 p-3.5 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-sm">
-              <div className="w-8 h-8 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center shrink-0 mt-0.5">
+            <div className="flex items-start gap-3 p-3.5 rounded-xl bg-white/10 border border-white/15 backdrop-blur-sm">
+              <div className="w-8 h-8 rounded-lg bg-sky-400/20 text-sky-300 flex items-center justify-center shrink-0 mt-0.5">
                 <KeyRound className="w-4 h-4" />
               </div>
               <div className="text-xs">
                 <strong className="text-white block font-semibold mb-0.5">
-                  Bảo mật phân quyền theo vai trò (Zero-Leak RBAC)
+                  Phân quyền bảo mật theo phòng ban
                 </strong>
-                <span className="text-slate-400 leading-relaxed">
-                  Lọc trước metadata tại tầng truy vấn SQL, đảm bảo không rò rỉ tài liệu nhạy cảm giữa các phòng ban.
+                <span className="text-slate-200 leading-relaxed">
+                  Tự động giới hạn tra cứu đúng phạm vi tài liệu được cấp phép, ngăn ngừa rò rỉ dữ liệu nội bộ.
                 </span>
               </div>
             </div>
@@ -171,9 +141,9 @@ export default function LoginPage() {
         </div>
 
         {/* Footer Badges */}
-        <div className="relative z-10 pt-4 border-t border-white/10 flex items-center justify-between text-xs text-slate-400">
+        <div className="relative z-10 pt-4 border-t border-white/15 flex items-center justify-between text-xs text-slate-300">
           <span>Tiêu chuẩn bảo mật ISO/IEC 27001</span>
-          <span className="font-mono">v1.0-pgvector</span>
+          <span className="font-semibold text-white/80">DocuMind Enterprise v1.0</span>
         </div>
       </div>
 
@@ -265,20 +235,20 @@ export default function LoginPage() {
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="name@company.vn"
                   required
-                  className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition text-xs leading-relaxed"
+                  className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-slate-300 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#0a66c2] focus:ring-1 focus:ring-[#0a66c2] transition text-xs leading-relaxed"
                 />
               </div>
             </div>
 
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">
                   Mật khẩu
                 </label>
                 <button
                   type="button"
                   onClick={() => setHelpdeskModalOpen(true)}
-                  className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline font-semibold cursor-pointer"
+                  className="text-xs text-[#0a66c2] hover:underline font-semibold cursor-pointer"
                 >
                   Quên mật khẩu?
                 </button>
@@ -292,13 +262,13 @@ export default function LoginPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
                   required
-                  className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition text-xs leading-relaxed"
+                  className="w-full pl-10 pr-10 py-2.5 rounded-lg border border-slate-300 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#0a66c2] focus:ring-1 focus:ring-[#0a66c2] transition text-xs leading-relaxed"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   aria-label={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
@@ -308,7 +278,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs transition shadow-md shadow-indigo-500/25 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.99] cursor-pointer"
+              className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-lg bg-[#0a66c2] hover:bg-[#004182] text-white font-semibold text-xs transition shadow-sm disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.99] cursor-pointer"
             >
               {isSubmitting ? (
                 <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -321,34 +291,12 @@ export default function LoginPage() {
             </button>
           </form>
 
-          {/* Quick Demo Credentials Switcher for Evaluators */}
-          <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-2">
-            <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
-              <UserCheck className="w-3.5 h-3.5" />
-              Điền nhanh tài khoản thử nghiệm RBAC:
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-              {demoAccounts.map((acc, idx) => (
-                <button
-                  key={idx}
-                  type="button"
-                  onClick={() => fillDemoAccount(acc.email, acc.pass)}
-                  className={`p-2 rounded-xl border text-left text-[11px] transition hover:shadow-sm cursor-pointer ${acc.color}`}
-                  title={`Điền tự động: ${acc.email}`}
-                >
-                  <div className="font-bold truncate">{acc.role.split(' ')[0]}</div>
-                  <div className="text-[10px] opacity-80 truncate">{acc.email.split('@')[0]}</div>
-                </button>
-              ))}
-            </div>
-          </div>
-
           {/* Footer Navigation */}
-          <div className="text-center text-xs text-slate-500 dark:text-slate-400">
+          <div className="text-center text-xs text-slate-500">
             Chưa có tài khoản nhân viên?{' '}
             <Link
               href="/register"
-              className="text-indigo-600 dark:text-indigo-400 font-bold hover:underline"
+              className="text-[#0a66c2] font-bold hover:underline"
             >
               Đăng ký tài khoản mới
             </Link>
